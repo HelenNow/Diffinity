@@ -10,7 +10,7 @@
 - [Documentation](docs/documentation.md)
 - [NuGet Package](https://www.nuget.org/packages/Diffinity/)
 - [Contributing Guidelines](CONTRIBUTING.md)
-- [License](LICENSE.md)
+- [License](LICENSE)
 
 
 <div align="center">
