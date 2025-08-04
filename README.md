@@ -6,7 +6,7 @@
 
 [![NuGet](https://img.shields.io/nuget/v/Diffinity.svg)](https://www.nuget.org/packages/Diffinity)
 
-- [Homepage](docs/homepage.html)
+- [Homepage](https://HelenNow.github.io/Diffinity/index.html)
 - [Documentation](docs/documentation.md)
 - [NuGet Package](https://www.nuget.org/packages/Diffinity/)
 - [Contributing Guidelines](CONTRIBUTING.md)
