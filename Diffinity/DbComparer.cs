@@ -30,7 +30,7 @@ public enum Run
 public record DbServer(string name, string connectionString);
 public class DbComparer : DbObjectHandler
 {
-    
+
     static readonly string _outputFolder = @"Diffinity-output";
     static DbComparer()
     {
@@ -40,7 +40,7 @@ public class DbComparer : DbObjectHandler
             .WriteTo.File("logs/log.txt", rollingInterval: RollingInterval.Day)
             .CreateLogger();
     }
-    public static string Compare(DbServer sourceServer,DbServer destinationServer, ILogger? logger = null, string? outputFolder = null, ComparerAction? makeChange = ComparerAction.DoNotApplyChanges, DbObjectFilter? filter = DbObjectFilter.HideUnchanged,Run? run=Run.All)
+    public static string Compare(DbServer sourceServer, DbServer destinationServer, ILogger? logger = null, string? outputFolder = null, ComparerAction? makeChange = ComparerAction.DoNotApplyChanges, DbObjectFilter? filter = DbObjectFilter.HideUnchanged, Run? run = Run.All)
     {
         /// <summary>
         /// Executes comparison of database object types based on the specified Run option and returns the corresponding summary report.
@@ -49,55 +49,70 @@ public class DbComparer : DbObjectHandler
         if (logger == null) { logger = Log.Logger; }
 
         var ignoredObjects = DiffIgnoreLoader.LoadIgnoredObjects();
-        
+        summaryReportDto ProcReport;
+        summaryReportDto ViewReport;
+        summaryReportDto TableReport;
+
         switch (run)
         {
             case Run.Proc:
                 {
-                    string ProceduresIndex = CompareProcs(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value,run.Value,ignoredObjects);
-                    return HtmlReportWriter.WriteIndexSummary(sourceServer.connectionString, destinationServer.connectionString, outputFolder, procIndexPath: ProceduresIndex);
+                    ProcReport = CompareProcs(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
+                    File.WriteAllText(ProcReport.fullPath, ProcReport.html.Replace("{procsCount}", ProcReport.count));
+                    return HtmlReportWriter.WriteIndexSummary(sourceServer.connectionString, destinationServer.connectionString, outputFolder, procIndexPath: ProcReport.path);
                 }
             case Run.View:
                 {
-                    string ViewsIndex = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value,run.Value,ignoredObjects);
-                    return HtmlReportWriter.WriteIndexSummary(sourceServer.connectionString, destinationServer.connectionString, outputFolder, viewIndexPath: ViewsIndex);
+                    ViewReport = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
+                    File.WriteAllText(ViewReport.fullPath, ViewReport.html.Replace("{viewsCount}", ViewReport.count));
+                    return HtmlReportWriter.WriteIndexSummary(sourceServer.connectionString, destinationServer.connectionString, outputFolder, viewIndexPath: ViewReport.path);
                 }
             case Run.Table:
                 {
-                    string TablesIndex = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value,run.Value, ignoredObjects);
-                    return HtmlReportWriter.WriteIndexSummary(sourceServer.connectionString, destinationServer.connectionString, outputFolder, tableIndexPath: TablesIndex);
+                    TableReport = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
+                    File.WriteAllText(TableReport.fullPath, TableReport.html.Replace("{tablesCount}", TableReport.count));
+                    return HtmlReportWriter.WriteIndexSummary(sourceServer.connectionString, destinationServer.connectionString, outputFolder, tableIndexPath: TableReport.path);
                 }
             case Run.ProcView:
                 {
-                    string ProceduresIndex = CompareProcs(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value,ignoredObjects);
-                    string ViewsIndex = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
-                    return HtmlReportWriter.WriteIndexSummary(sourceServer.connectionString, destinationServer.connectionString, outputFolder, procIndexPath: ProceduresIndex, viewIndexPath: ViewsIndex);
+                    ProcReport = CompareProcs(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
+                    ViewReport = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
+                    File.WriteAllText(ProcReport.fullPath, ProcReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count));
+                    File.WriteAllText(ViewReport.fullPath, ViewReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count));
+                    return HtmlReportWriter.WriteIndexSummary(sourceServer.connectionString, destinationServer.connectionString, outputFolder, procIndexPath: ProcReport.path, viewIndexPath: ViewReport.path);
                 }
             case Run.ProcTable:
                 {
-                    string ProceduresIndex = CompareProcs(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
-                    string TablesIndex = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
-                    return HtmlReportWriter.WriteIndexSummary(sourceServer.connectionString, destinationServer.connectionString, outputFolder, procIndexPath: ProceduresIndex, tableIndexPath: TablesIndex);
+                    ProcReport = CompareProcs(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
+                    TableReport = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
+                    File.WriteAllText(ProcReport.fullPath, ProcReport.html.Replace("{procsCount}", ProcReport.count).Replace("{tablesCount}", TableReport.count));
+                    File.WriteAllText(TableReport.fullPath, TableReport.html.Replace("{procsCount}", ProcReport.count).Replace("{tablesCount}", TableReport.count));
+                    return HtmlReportWriter.WriteIndexSummary(sourceServer.connectionString, destinationServer.connectionString, outputFolder, procIndexPath: ProcReport.path, tableIndexPath: TableReport.path);
                 }
             case Run.ViewTable:
                 {
-                    string ViewsIndex = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
-                    string TablesIndex = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
-                    return HtmlReportWriter.WriteIndexSummary(sourceServer.connectionString, destinationServer.connectionString, outputFolder, viewIndexPath: ViewsIndex, tableIndexPath: TablesIndex);
+                    ViewReport = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
+                    TableReport = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
+                    File.WriteAllText(ViewReport.fullPath, ViewReport.html.Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count));
+                    File.WriteAllText(TableReport.fullPath, TableReport.html.Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count));
+                    return HtmlReportWriter.WriteIndexSummary(sourceServer.connectionString, destinationServer.connectionString, outputFolder, viewIndexPath: ViewReport.path, tableIndexPath: TableReport.path);
                 }
             case Run.All:
                 {
-                    string ProceduresIndex = CompareProcs(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
-                    string ViewsIndex = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
-                    string TablesIndex = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
-                    return HtmlReportWriter.WriteIndexSummary(sourceServer.connectionString, destinationServer.connectionString, outputFolder,procIndexPath:ProceduresIndex, viewIndexPath: ViewsIndex, tableIndexPath: TablesIndex);
+                    ProcReport = CompareProcs(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
+                    ViewReport = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
+                    TableReport = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects);
+                    File.WriteAllText(ProcReport.fullPath, ProcReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count));
+                    File.WriteAllText(ViewReport.fullPath, ViewReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count));
+                    File.WriteAllText(TableReport.fullPath, TableReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count));
+                    return HtmlReportWriter.WriteIndexSummary(sourceServer.connectionString, destinationServer.connectionString, outputFolder, procIndexPath: ProcReport.path, viewIndexPath: ViewReport.path, tableIndexPath: TableReport.path);
                 }
             default:
                 throw new ArgumentOutOfRangeException(nameof(run), run, "Invalid Run option");
         }
 
     }
-    public static string CompareProcs(DbServer sourceServer, DbServer destinationServer,string outputFolder , ComparerAction makeChange, DbObjectFilter filter,Run run, HashSet<string> ignoredObjects)
+    public static summaryReportDto CompareProcs(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects)
     {
         /// <summary>
         /// Compares stored procedures between source and destination databases.
@@ -125,7 +140,7 @@ public class DbComparer : DbObjectHandler
                 continue;
             }
             string[] parts = proc.Split('.');
-            string schema = parts.Length > 1 ? parts[0] : "dbo"; 
+            string schema = parts.Length > 1 ? parts[0] : "dbo";
             string safeSchema = MakeSafe(schema);
             string safeName = MakeSafe(proc);
             string schemaFolder = Path.Combine(proceduresFolderPath, safeSchema);
@@ -156,7 +171,7 @@ public class DbComparer : DbObjectHandler
                 HtmlReportWriter.WriteBodyHtml(sourcePath, $"{sourceServer.name}", sourceBody, returnPage);
                 HtmlReportWriter.WriteBodyHtml(destinationPath, $"{destinationServer.name}", destinationBody, returnPage);
 
-              if (!isDestinationEmpty && !areEqual)
+                if (!isDestinationEmpty && !areEqual)
                 {
                     string differencesPath = Path.Combine(schemaFolder, differencesFile);
                     HtmlReportWriter.DifferencesWriter(differencesPath, sourceServer.name, destinationServer.name, sourceBody, destinationBody, "Differences", proc, returnPage);
@@ -171,7 +186,7 @@ public class DbComparer : DbObjectHandler
 
             if (!areEqual && makeChange == ComparerAction.ApplyChanges)
             {
-                AlterDbObject(destinationServer.connectionString, sourceBody,destinationBody);
+                AlterDbObject(destinationServer.connectionString, sourceBody, destinationBody);
                 (_, destinationNewBody) = ProcedureFetcher.GetProcedureBody(sourceServer.connectionString, destinationServer.connectionString, proc);
                 string newPath = Path.Combine(schemaFolder, newFile);
                 HtmlReportWriter.WriteBodyHtml(newPath, $"New {destinationServer.name}", destinationNewBody, returnPage);
@@ -193,10 +208,17 @@ public class DbComparer : DbObjectHandler
         }
 
         // Step 9 - Generate summary report
-        HtmlReportWriter.WriteSummaryReport(sourceServer, destinationServer, Path.Combine(proceduresFolderPath, "index.html"), results, filter,run);
-        return ("Procedures/index.html");
+        (string procReportHtml, string procCount) = HtmlReportWriter.WriteSummaryReport(sourceServer, destinationServer, Path.Combine(proceduresFolderPath, "index.html"), results, filter, run);
+        return new summaryReportDto
+        {
+            path = "Procedures/index.html",
+            fullPath = Path.Combine(proceduresFolderPath, "index.html"),
+            html = procReportHtml,
+            count = procCount
+
+        };
     }
-    public static string CompareViews(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter,Run run, HashSet<string> ignoredObjects)
+    public static summaryReportDto CompareViews(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects)
     {
         /// <summary>
         /// Compares SQL views between source and destination databases.
@@ -224,7 +246,7 @@ public class DbComparer : DbObjectHandler
                 continue;
             }
             string[] parts = view.Split('.');
-            string schema = parts.Length > 1 ? parts[0] : "dbo"; 
+            string schema = parts.Length > 1 ? parts[0] : "dbo";
             string safeSchema = MakeSafe(schema);
             string safeName = MakeSafe(view);
             string schemaFolder = Path.Combine(viewsFolderPath, safeSchema);
@@ -242,7 +264,7 @@ public class DbComparer : DbObjectHandler
             string newFile = $"{safeName}_New.html";
             string returnPage = Path.Combine("..", "index.html");
 
-            bool isDestinationEmpty =string.IsNullOrEmpty(destinationBody);
+            bool isDestinationEmpty = string.IsNullOrEmpty(destinationBody);
             bool isVisible = false;
             bool isDifferencesVisible = false;
 
@@ -291,10 +313,16 @@ public class DbComparer : DbObjectHandler
         }
 
         // Step 9 - Generate summary report
-        HtmlReportWriter.WriteSummaryReport(sourceServer, destinationServer, Path.Combine(viewsFolderPath, "index.html"), results, filter,run);
-        return ("Views/index.html");
+        (string viewReportHtml, string viewCount) = HtmlReportWriter.WriteSummaryReport(sourceServer, destinationServer, Path.Combine(viewsFolderPath, "index.html"), results, filter, run);
+        return new summaryReportDto
+        {
+            path = "Views/index.html",
+            fullPath = Path.Combine(viewsFolderPath, "index.html"),
+            html = viewReportHtml,
+            count = viewCount
+        };
     }
-    public static string CompareTables(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter,Run run, HashSet<string> ignoredObjects)
+    public static summaryReportDto CompareTables(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects)
     {
         /// <summary>
         /// Compares table column definitions between source and destination databases.
@@ -329,7 +357,7 @@ public class DbComparer : DbObjectHandler
             string schemaFolder = Path.Combine(tablesFolderPath, safeSchema);
 
             // Step 4 - Fetch table column info
-            List<string> allDifferences= new List<string>();
+            List<string> allDifferences = new List<string>();
             (List<tableDto> sourceInfo, List<tableDto> destinationInfo) = TableFetcher.GetTableInfo(sourceServer.connectionString, destinationServer.connectionString, table);
             bool isDestinationEmpty = destinationInfo.IsNullOrEmpty();
 
@@ -363,8 +391,8 @@ public class DbComparer : DbObjectHandler
                 Directory.CreateDirectory(schemaFolder);
                 string sourcePath = Path.Combine(schemaFolder, sourceFile);
                 string destinationPath = Path.Combine(schemaFolder, destinationFile);
-                HtmlReportWriter.WriteBodyHtml(sourcePath, $"{sourceServer.name} Table", HtmlReportWriter.PrintTableInfo(sourceInfo,allDifferences), returnPage);
-                HtmlReportWriter.WriteBodyHtml(destinationPath, $"{destinationServer.name} Table", HtmlReportWriter.PrintTableInfo(destinationInfo,allDifferences), returnPage);
+                HtmlReportWriter.WriteBodyHtml(sourcePath, $"{sourceServer.name} Table", HtmlReportWriter.PrintTableInfo(sourceInfo, allDifferences), returnPage);
+                HtmlReportWriter.WriteBodyHtml(destinationPath, $"{destinationServer.name} Table", HtmlReportWriter.PrintTableInfo(destinationInfo, allDifferences), returnPage);
                 isVisible = true;
             }
 
@@ -376,7 +404,7 @@ public class DbComparer : DbObjectHandler
             {
                 (_, destinationNewInfo) = TableFetcher.GetTableInfo(sourceServer.connectionString, destinationServer.connectionString, table);
                 string newPath = Path.Combine(schemaFolder, newFile);
-                HtmlReportWriter.WriteBodyHtml(newPath, $"New {destinationServer.name} Table", HtmlReportWriter.PrintTableInfo(destinationNewInfo,null), returnPage);
+                HtmlReportWriter.WriteBodyHtml(newPath, $"New {destinationServer.name} Table", HtmlReportWriter.PrintTableInfo(destinationNewInfo, null), returnPage);
                 wasAltered = true;
             }
 
@@ -394,8 +422,14 @@ public class DbComparer : DbObjectHandler
         }
 
         // Step 10 - Generate summary report
-        HtmlReportWriter.WriteSummaryReport(sourceServer, destinationServer, Path.Combine(tablesFolderPath, "index.html"), results, filter,run);
-        return ("Tables/index.html");
+        (string tableHtmlReport, string tablesCount) = HtmlReportWriter.WriteSummaryReport(sourceServer, destinationServer, Path.Combine(tablesFolderPath, "index.html"), results, filter, run);
+        return new summaryReportDto
+        {
+            path = "Tables/index.html",
+            fullPath = Path.Combine(tablesFolderPath, "index.html"),
+            html = tableHtmlReport,
+            count = tablesCount
+        };
     }
     private static string MakeSafe(string name)
     {
@@ -405,6 +439,13 @@ public class DbComparer : DbObjectHandler
             name = name.Replace(c, '_');
         }
         return name;
+    }
+    public class summaryReportDto
+    {
+        public string path { get; set; }
+        public string fullPath { get; set; }
+        public string html { get; set; }
+        public string count { get; set; }
     }
 }
 

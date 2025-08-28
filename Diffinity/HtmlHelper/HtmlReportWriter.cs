@@ -200,7 +200,7 @@ public static class HtmlReportWriter
             <th>{MetaData} Name</th>
             <th>{source} Original</th>
             <th>{destination} Original</th>
-            <th>Changes</th>
+            {differences}
         </tr>
     ";
     private const string BodyTemplate = @"
@@ -461,7 +461,7 @@ public static class HtmlReportWriter
     /// <summary>
     /// Writes a detailed summary report comparing objects (procedures, views, tables) between source and destination.
     /// </summary>
-    public static void WriteSummaryReport(DbServer sourceServer, DbServer destinationServer, string summaryPath, List<dbObjectResult> results, DbObjectFilter filter, Run run)
+    public static (string html, string countObjects) WriteSummaryReport(DbServer sourceServer, DbServer destinationServer, string summaryPath, List<dbObjectResult> results, DbObjectFilter filter, Run run)
     {
         StringBuilder html = new();
         var result = results[0];
@@ -469,8 +469,8 @@ public static class HtmlReportWriter
         html.Append(ComparisonTemplate.Replace("{source}", sourceServer.name).Replace("{destination}", destinationServer.name).Replace("{MetaData}", result.Type).Replace("{nav}", BuildNav(run)));
 
         #region 1-Create the new table
-        var newProcedures = results.Where(r => r.IsDestinationEmpty).ToList();
-        if (newProcedures.Any())
+        var newObjects = results.Where(r => r.IsDestinationEmpty).ToList();
+        if (newObjects.Any())
         {
             StringBuilder newTable = new StringBuilder();
             newTable.AppendLine($@"<h2 style=""color: #B42A68;"">New {result.Type}s in {sourceServer.name} Database : </h2>
@@ -482,7 +482,7 @@ public static class HtmlReportWriter
                 </tr>");
 
             int newCount = 1;
-            foreach (var item in newProcedures)
+            foreach (var item in newObjects)
             {
                 if (item.SourceFile == null) continue;
                 string sourceLink = $@"<a href=""{item.SourceFile}"">View</a";
@@ -505,26 +505,49 @@ public static class HtmlReportWriter
 
         #region 2-Create the Comparison Table
         int Number = 1;
+        var existingObjects = results.Where(r => !r.IsDestinationEmpty).ToList();
         html.AppendLine($@"<h2 style = ""color: #B42A68;"">Changed {result.Type}s :</h2>");
-        foreach (var item in results)
+        foreach (var item in existingObjects)
         {
-            if (item.IsDestinationEmpty) continue;
-            // Prepare file links
-            string sourceColumn = item.SourceFile != null ? $@"<a href=""{item.SourceFile}"">View</a>" : "—";
-            string destinationColumn = item.DestinationFile != null ? $@"<a href=""{item.DestinationFile}"">View</a>" : "—";
-            string differencesColumn = item.DifferencesFile != null ? $@"<a href=""{item.DifferencesFile}"">View</a>" : "—";
-            string newColumn = item.NewFile != null ? $@"<a href=""{item.NewFile}"">View</a>" : "—";
-
-            if ((item.IsEqual && filter == DbObjectFilter.ShowUnchanged) || !item.IsEqual)
+            if (result.Type == "Table")
             {
-                html.Append($@"<tr>
+                html.Replace("{differences}", "");
+                // Prepare file links
+                string sourceColumn = item.SourceFile != null ? $@"<a href=""{item.SourceFile}"">View</a>" : "—";
+                string destinationColumn = item.DestinationFile != null ? $@"<a href=""{item.DestinationFile}"">View</a>" : "—";
+                string newColumn = item.NewFile != null ? $@"<a href=""{item.NewFile}"">View</a>" : "—";
+
+                if ((item.IsEqual && filter == DbObjectFilter.ShowUnchanged) || !item.IsEqual)
+                {
+                    html.Append($@"<tr>
+                    <td>{Number}</td>
+                    <td>{item.Name}</td>
+                    <td>{sourceColumn}</td>
+                    <td>{destinationColumn}</td>
+                     </tr>");
+                    Number++;
+                }
+            }
+            else
+            {
+                html.Replace("{differences}", "<th>Changes</th>");
+                // Prepare file links
+                string sourceColumn = item.SourceFile != null ? $@"<a href=""{item.SourceFile}"">View</a>" : "—";
+                string destinationColumn = item.DestinationFile != null ? $@"<a href=""{item.DestinationFile}"">View</a>" : "—";
+                string differencesColumn = item.DifferencesFile != null ? $@"<a href=""{item.DifferencesFile}"">View</a>" : "—";
+                string newColumn = item.NewFile != null ? $@"<a href=""{item.NewFile}"">View</a>" : "—";
+
+                if ((item.IsEqual && filter == DbObjectFilter.ShowUnchanged) || !item.IsEqual)
+                {
+                    html.Append($@"<tr>
                     <td>{Number}</td>
                     <td>{item.Name}</td>
                     <td>{sourceColumn}</td>
                     <td>{destinationColumn}</td>
                     <td>{differencesColumn}</td>
                      </tr>");
-                Number++;
+                    Number++;
+                }
             }
         }
         html.Append($@"</table>
@@ -534,7 +557,14 @@ public static class HtmlReportWriter
                        </html>");
         #endregion
 
-        File.WriteAllText(summaryPath, html.ToString());
+        #region 3-Update counts in the nav bar
+        int newObjectsCount = newObjects.Count();
+        int notEqualCount = existingObjects.Count(r => !r.IsEqual);
+        int equalCount = existingObjects.Count(r => r.IsEqual);
+        string countObjects = filter == DbObjectFilter.ShowUnchanged ? $"({newObjectsCount}/{notEqualCount}/{equalCount})" : $"({newObjectsCount}/{notEqualCount})";
+        #endregion
+
+        return (html.ToString(), countObjects);
         #region Local function
         string BuildNav(Run run)
         {
@@ -546,36 +576,36 @@ public static class HtmlReportWriter
             switch (run)
             {
                 case Run.Proc:
-                    sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures</a>");
+                    sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures {{procsCount}}</a>");
                     break;
 
                 case Run.View:
-                    sb.AppendLine($@"  <a href=""{viewsPath}"">Views</a>");
+                    sb.AppendLine($@"  <a href=""{viewsPath}"">Views {{viewsCount}}</a>");
                     break;
 
                 case Run.Table:
-                    sb.AppendLine($@"  <a href=""{tablesPath}"">Tables</a>");
+                    sb.AppendLine($@"  <a href=""{tablesPath}"">Tables {{tablesCount}}</a>");
                     break;
 
                 case Run.ProcView:
-                    sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures</a>");
-                    sb.AppendLine($@"  <a href=""{viewsPath}"">Views</a>");
+                    sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures {{procsCount}}</a>");
+                    sb.AppendLine($@"  <a href=""{viewsPath}"">Views {{viewsCount}}</a>");
                     break;
 
                 case Run.ProcTable:
-                    sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures</a>");
-                    sb.AppendLine($@"  <a href=""{tablesPath}"">Tables</a>");
+                    sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures {{procsCount}}</a>");
+                    sb.AppendLine($@"  <a href=""{tablesPath}"">Tables {{tablesCount}}</a>");
                     break;
 
                 case Run.ViewTable:
-                    sb.AppendLine($@"  <a href=""{viewsPath}"">Views</a>");
-                    sb.AppendLine($@"  <a href=""{tablesPath}"">Tables</a>");
+                    sb.AppendLine($@"  <a href=""{viewsPath}"">Views {{viewsCount}}</a>");
+                    sb.AppendLine($@"  <a href=""{tablesPath}"">Tables {{tablesCount}}</a>");
                     break;
 
                 case Run.All:
-                    sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures</a>");
-                    sb.AppendLine($@"  <a href=""{viewsPath}"">Views</a>");
-                    sb.AppendLine($@"  <a href=""{tablesPath}"">Tables</a>");
+                    sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures {{procsCount}}</a>");
+                    sb.AppendLine($@"  <a href=""{viewsPath}"">Views {{viewsCount}}</a>");
+                    sb.AppendLine($@"  <a href=""{tablesPath}"">Tables {{tablesCount}}</a>");
                     break;
 
                 default:
@@ -595,7 +625,7 @@ public static class HtmlReportWriter
     public static void WriteBodyHtml(string filePath, string title, string body, string returnPage)
     {
         StringBuilder html = new StringBuilder();
-        html.AppendLine(BodyTemplate.Replace("{title}", title)); 
+        html.AppendLine(BodyTemplate.Replace("{title}", title));
         string coloredCode = HighlightSql(body);
         //string escapedBody = EscapeHtml(body);
 
@@ -603,7 +633,7 @@ public static class HtmlReportWriter
         {
             coloredCode = body;
         }
-      
+
 
         html.AppendLine($@"<body>
         <h1>{title}</h1>
@@ -746,17 +776,6 @@ public static class HtmlReportWriter
 
     #region Helpers
     /// <summary>
-    /// Escapes HTML special characters.
-    /// </summary>
-    static string EscapeHtml(string input)
-    {
-        if (string.IsNullOrEmpty(input)) return string.Empty;
-        return input.Replace("&", "&amp;")
-                    .Replace("<", "&lt;")
-                    .Replace(">", "&gt;");
-    }
-
-    /// <summary>
     /// Maps DiffPlex line change types to CSS class names.
     /// </summary>
     static string GetCssClass(ChangeType type)
@@ -776,7 +795,7 @@ public static class HtmlReportWriter
     /// </summary>
     static string HighlightSql(string sqlCode)
     {
-        if (sqlCode==null) return null;
+        if (sqlCode == null) return null;
         var colorizer = new CodeColorizer();
         string coloredCode = colorizer.Colorize(sqlCode, Languages.Sql).Replace(@"<div style=""color:Black;background-color:White;""><pre>", "").Replace("</div>", "");
         return coloredCode;
@@ -845,5 +864,5 @@ public static class HtmlReportWriter
 
     }
     #endregion
-    
+
 }
