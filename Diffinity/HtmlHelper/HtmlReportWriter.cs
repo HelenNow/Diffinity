@@ -86,6 +86,7 @@ public static class HtmlReportWriter
         <li>{procsIndex}</li>
         <li>{viewsIndex}</li>
         <li>{tablesIndex}</li>
+        <li>{ignoredIndex}</li>
     </ul>
 </body>
 </html>
@@ -201,6 +202,116 @@ public static class HtmlReportWriter
             <th>{source} Original</th>
             <th>{destination} Original</th>
             {differences}
+        </tr>
+    ";
+    private const string IgnoredTemplate = @"
+<!DOCTYPE html>
+<html lang=""en"">
+<head>
+    <meta charset=""UTF-8"">
+    <title>Ignored Summary</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #fff;
+            color: #333;
+        }
+        h1 {
+            color: #EC317F;
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        table {
+            width: 80%;
+            border-collapse: collapse;
+            margin:auto;
+        }
+        th, td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #f5f5f5;
+        }
+        .match {
+            color: green;
+            font-weight: 600;
+        }
+        .diff {
+            color: red;
+            font-weight: 600;
+        }
+        a {
+            color: #EC317F;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .top-nav {
+            display: flex;
+            justify-content: center;
+            gap: 60px; /* controls spacing between links */
+            margin-bottom: 40px;
+        }
+        
+        .top-nav a {
+            position: relative;
+            color: #EC317F;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.2rem;
+            padding-bottom: 6px;
+        }
+        
+        .top-nav a::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            height: 3px;
+            background-color: #EC317F;
+            transform: scaleX(0);
+            transform-origin: bottom left;
+            transition: transform 0.3s ease;
+        }
+        
+        .top-nav a:hover::after {
+            transform: scaleX(1);
+        }
+        .return-btn {
+            display: block;
+            width: 220px;
+            margin: 0 auto;
+            padding: 12px 0;
+            background-color: #EC317F;
+            color: white;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 6px;
+            box-shadow: 0 3px 8px rgba(236, 49, 127, 0.25);
+            transition: background-color 0.3s ease;
+            font-size: 1rem;
+        }
+        .return-btn:hover {
+            background-color: #b42a68;
+        }
+    </style>
+</head>
+<body>
+    <h1>Ignored Summary</h1>
+    {nav}
+    <table>
+        <tr>
+            <th></th>
+            <th>Name</th>
         </tr>
     ";
     private const string BodyTemplate = @"
@@ -428,7 +539,7 @@ public static class HtmlReportWriter
     /// <summary>
     /// Writes the main index summary HTML page linking to individual reports for procedures, views, and tables.
     /// </summary>
-    public static string WriteIndexSummary(string sourceConnectionString, string destinationConnectionString, string outputPath, string? procIndexPath = null, string? viewIndexPath = null, string? tableIndexPath = null)
+    public static string WriteIndexSummary(string sourceConnectionString, string destinationConnectionString, string outputPath, string? ignoredIndexPath = null, string? procIndexPath = null, string? viewIndexPath = null, string? tableIndexPath = null)
     {
         // Extract server and database names from connection strings
         var sourceBuilder = new SqlConnectionStringBuilder(sourceConnectionString);
@@ -446,9 +557,10 @@ public static class HtmlReportWriter
         string procsIndex = procIndexPath == null ? "" : $@"<a href=""{procIndexPath}"" class=""btn"">Procedures</a>";
         string viewsIndex = viewIndexPath == null ? "" : $@"<a href=""{viewIndexPath}"" class=""btn"">Views</a>";
         string tablesIndex = tableIndexPath == null ? "" : $@"<a href=""{tableIndexPath}"" class=""btn"">Tables</a>";
+        string ignoredIndex = ignoredIndexPath == null ? "" : $@"<a href=""{ignoredIndexPath}"" class=""btn"">Ignored</a>";
 
         // Replace placeholders in the index template
-        html.Append(IndexTemplate.Replace("{sourceServer}", sourceServer).Replace("{sourceDatabase}", sourceDatabase).Replace("{destinationServer}", destinationServer).Replace("{destinationDatabase}", destinationDatabase).Replace("{procsIndex}", procsIndex).Replace("{viewsIndex}", viewsIndex).Replace("{tablesIndex}", tablesIndex).Replace("{Date}", Date));
+        html.Append(IndexTemplate.Replace("{sourceServer}", sourceServer).Replace("{sourceDatabase}", sourceDatabase).Replace("{destinationServer}", destinationServer).Replace("{destinationDatabase}", destinationDatabase).Replace("{procsIndex}", procsIndex).Replace("{viewsIndex}", viewsIndex).Replace("{tablesIndex}", tablesIndex).Replace("{ignoredIndex}", ignoredIndex).Replace("{Date}", Date));
         string indexPath = Path.Combine(outputPath, "index.html");
 
         // Write to index.html
@@ -461,12 +573,12 @@ public static class HtmlReportWriter
     /// <summary>
     /// Writes a detailed summary report comparing objects (procedures, views, tables) between source and destination.
     /// </summary>
-    public static (string html, string countObjects) WriteSummaryReport(DbServer sourceServer, DbServer destinationServer, string summaryPath, List<dbObjectResult> results, DbObjectFilter filter, Run run)
+    public static (string html, string countObjects) WriteSummaryReport(DbServer sourceServer, DbServer destinationServer, string summaryPath, List<dbObjectResult> results, DbObjectFilter filter, Run run, bool isIgnoredEmpty,string ignoredCount)
     {
         StringBuilder html = new();
         var result = results[0];
         string returnPage = Path.Combine("..", "index.html");
-        html.Append(ComparisonTemplate.Replace("{source}", sourceServer.name).Replace("{destination}", destinationServer.name).Replace("{MetaData}", result.Type).Replace("{nav}", BuildNav(run)));
+        html.Append(ComparisonTemplate.Replace("{source}", sourceServer.name).Replace("{destination}", destinationServer.name).Replace("{MetaData}", result.Type).Replace("{nav}", BuildNav(run, isIgnoredEmpty,ignoredCount)));
 
         #region 1-Create the new table
         var newObjects = results.Where(r => r.IsDestinationEmpty).ToList();
@@ -565,55 +677,46 @@ public static class HtmlReportWriter
         #endregion
 
         return (html.ToString(), countObjects);
-        #region Local function
-        string BuildNav(Run run)
+    }
+    #endregion
+
+    #region Ignored Report Writer
+    public static DbComparer.summaryReportDto WriteIgnoredReport(string outputFolder, HashSet<string> ignoredObjects, Run run)
+    {
+        #region 1- Setup folder structure for reports
+        Directory.CreateDirectory(outputFolder);
+        string ignoredFolderPath = Path.Combine(outputFolder, "Ignored");
+        Directory.CreateDirectory(ignoredFolderPath);
+        #endregion
+
+        StringBuilder html = new();
+        string returnPage = Path.Combine("..", "index.html");
+        string ignoredCount = ignoredObjects.Count().ToString();
+        html.Append(IgnoredTemplate.Replace("{nav}", BuildNav(run, false,ignoredCount)));
+
+        #region Create the Ignored Table
+        int Number = 1;
+        html.AppendLine($@"<h2 style = ""color: #B42A68; margin-left:100px"">Ignored Objects :</h2>");
+        foreach (var item in ignoredObjects)
         {
-            string proceduresPath = "../Procedures/index.html";
-            string viewsPath = "../Views/index.html";
-            string tablesPath = "../Tables/index.html";
-            var sb = new StringBuilder();
-            sb.AppendLine(@"<nav class=""top-nav"">");
-            switch (run)
-            {
-                case Run.Proc:
-                    sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures {{procsCount}}</a>");
-                    break;
-
-                case Run.View:
-                    sb.AppendLine($@"  <a href=""{viewsPath}"">Views {{viewsCount}}</a>");
-                    break;
-
-                case Run.Table:
-                    sb.AppendLine($@"  <a href=""{tablesPath}"">Tables {{tablesCount}}</a>");
-                    break;
-
-                case Run.ProcView:
-                    sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures {{procsCount}}</a>");
-                    sb.AppendLine($@"  <a href=""{viewsPath}"">Views {{viewsCount}}</a>");
-                    break;
-
-                case Run.ProcTable:
-                    sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures {{procsCount}}</a>");
-                    sb.AppendLine($@"  <a href=""{tablesPath}"">Tables {{tablesCount}}</a>");
-                    break;
-
-                case Run.ViewTable:
-                    sb.AppendLine($@"  <a href=""{viewsPath}"">Views {{viewsCount}}</a>");
-                    sb.AppendLine($@"  <a href=""{tablesPath}"">Tables {{tablesCount}}</a>");
-                    break;
-
-                case Run.All:
-                    sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures {{procsCount}}</a>");
-                    sb.AppendLine($@"  <a href=""{viewsPath}"">Views {{viewsCount}}</a>");
-                    sb.AppendLine($@"  <a href=""{tablesPath}"">Tables {{tablesCount}}</a>");
-                    break;
-
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(run), run, "Invalid Run option");
-            }
-            sb.AppendLine("</nav>");
-            return sb.ToString();
+            html.Append($@"<tr>
+                    <td>{Number}</td>
+                    <td>{item}</td>
+                     </tr>");
+            Number++;
         }
+        html.Append($@"</table>
+                       <br>
+                       <a href=""{returnPage}"" class=""return-btn"">Return to Index</a>
+                       </body>
+                       </html>");
+
+        return new DbComparer.summaryReportDto
+        {
+            path = "Ignored/index.html",
+            fullPath = Path.Combine(ignoredFolderPath, "index.html"),
+            html = html.ToString()
+        };
         #endregion
     }
     #endregion
@@ -799,6 +902,57 @@ public static class HtmlReportWriter
         var colorizer = new CodeColorizer();
         string coloredCode = colorizer.Colorize(sqlCode, Languages.Sql).Replace(@"<div style=""color:Black;background-color:White;""><pre>", "").Replace("</div>", "");
         return coloredCode;
+    }
+    /// <summary>
+    /// Write the nav section in the comparison summary pages
+    /// </summary>
+    static string BuildNav(Run run, bool isIgnoredEmpty,string count)
+    {
+        string proceduresPath = "../Procedures/index.html";
+        string viewsPath = "../Views/index.html";
+        string tablesPath = "../Tables/index.html";
+        string ignoredPath = "../Ignored/index.html";
+        var sb = new StringBuilder();
+        sb.AppendLine(@"<nav class=""top-nav"">");
+        switch (run)
+        {
+            case Run.Proc:
+                sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures {{procsCount}}</a>");
+                break;
+            case Run.View:
+                sb.AppendLine($@"  <a href=""{viewsPath}"">Views {{viewsCount}}</a>");
+                break;
+            case Run.Table:
+                sb.AppendLine($@"  <a href=""{tablesPath}"">Tables {{tablesCount}}</a>");
+                break;
+            case Run.ProcView:
+                sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures {{procsCount}}</a>");
+                sb.AppendLine($@"  <a href=""{viewsPath}"">Views {{viewsCount}}</a>");
+                break;
+            case Run.ProcTable:
+                sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures {{procsCount}}</a>");
+                sb.AppendLine($@"  <a href=""{tablesPath}"">Tables {{tablesCount}}</a>");
+                break;
+            case Run.ViewTable:
+                sb.AppendLine($@"  <a href=""{viewsPath}"">Views {{viewsCount}}</a>");
+                sb.AppendLine($@"  <a href=""{tablesPath}"">Tables {{tablesCount}}</a>");
+                break;
+
+            case Run.All:
+                sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures {{procsCount}}</a>");
+                sb.AppendLine($@"  <a href=""{viewsPath}"">Views {{viewsCount}}</a>");
+                sb.AppendLine($@"  <a href=""{tablesPath}"">Tables {{tablesCount}}</a>");
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(run), run, "Invalid Run option");
+        }
+        if (!isIgnoredEmpty)
+        {
+            sb.AppendLine($@"  <a href=""{ignoredPath}"">Ignored({count})</a>");
+        }
+        sb.AppendLine("</nav>");
+        return sb.ToString();
     }
 
     /// <summary>
