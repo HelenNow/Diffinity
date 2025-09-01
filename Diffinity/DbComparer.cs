@@ -11,7 +11,8 @@ namespace Diffinity;
 public enum ComparerAction
 {
     ApplyChanges,
-    DoNotApplyChanges
+    DoNotApplyChanges,
+    None
 }
 public enum DbObjectFilter
 {

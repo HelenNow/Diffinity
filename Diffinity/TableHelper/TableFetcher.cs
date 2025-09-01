@@ -41,4 +41,9 @@ public class tableDto
     public string maxLength { get; set; }
     public string isPrimaryKey { get; set; }
     public string isForeignKey { get; set; }
+
+    public static implicit operator tableDto(tableDto v)
+    {
+        throw new NotImplementedException();
+    }
 }
