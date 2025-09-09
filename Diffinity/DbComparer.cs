@@ -382,15 +382,43 @@ public class DbComparer : DbObjectHandler
             (List<tableDto> sourceInfo, List<tableDto> destinationInfo) = TableFetcher.GetTableInfo(sourceServer.connectionString, destinationServer.connectionString, table);
             bool isDestinationEmpty = destinationInfo.IsNullOrEmpty();
 
+            int sourceColumnCount = sourceInfo.Count;
+            int destinationColumnCount = destinationInfo.Count;
+            int minCount = Math.Min(sourceColumnCount, destinationColumnCount);
             // Step 6 - Compare each column
-            for (int i = 0; i < sourceInfo.Count; i++)
+            for (int i = 0; i < minCount; i++)
             {
+                if (isDestinationEmpty)
+                {
+                    Serilog.Log.Information($"{table}: Changes detected");
+                    allDifferences.Add(table);
+                    continue;
+                }
+
                 var tableDto = sourceInfo[i];
                 (areEqual, List<string> differences) = TableComparerAndUpdater.ComparerAndUpdater(destinationServer.connectionString, sourceInfo[i], destinationInfo[i], table, makeChange);
                 if (!areEqual)
                 {
                     allDifferences.AddRange(differences);
                     Serilog.Log.Information($"{table}: Changes detected");
+                }
+            }
+            // Handle extra columns in source
+            if (sourceColumnCount > destinationColumnCount)
+            {
+                for (int i = destinationColumnCount; i < sourceColumnCount; i++)
+                {
+                    allDifferences.Add(sourceInfo[i].columnName);
+                    areEqual = false;
+                }
+            }
+            // Handle extra columns in destination
+            if (destinationColumnCount > sourceColumnCount)
+            {
+                for (int i = sourceColumnCount; i < destinationColumnCount; i++)
+                {
+                    allDifferences.Add(destinationInfo[i].columnName);
+                    areEqual = false;
                 }
             }
             if (areEqual)
