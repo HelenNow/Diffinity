@@ -5,9 +5,12 @@ internal class Program
 {
     static void Main(string[] args)
     {
-        var MyDbV1 = new DbServer("Corewell", Environment.GetEnvironmentVariable("connectionString"));
-        var MyDbV2 = new DbServer("CMH", Environment.GetEnvironmentVariable("CmhCs"));
-        string IndexPage = DbComparer.Compare(MyDbV1, MyDbV2);
+        var MyDbV1 = new DbServer("Corewell", Environment.GetEnvironmentVariable("localDb"));
+        var MyDbV2 = new DbServer("CMH", Environment.GetEnvironmentVariable("localDb1"));
+        var sw = Stopwatch.StartNew();
+        string IndexPage = DbComparer.Compare(MyDbV1, MyDbV2,run: Run.Proc);
+        sw.Stop();
+        Console.WriteLine($"Comparison completed in {sw.Elapsed.TotalSeconds} seconds.");
         #region Optional:
         // You can optionally pass any of the following parameters:
         // logger: your custom ILogger instance

@@ -33,6 +33,7 @@ public class DbComparer : DbObjectHandler
 {
 
     static readonly string _outputFolder = @"Diffinity-output";
+    static readonly ParallelOptions _parallelOptions = new() { MaxDegreeOfParallelism = 4 };
     static DbComparer()
     {
         Log.Logger = new LoggerConfiguration()
@@ -144,12 +145,12 @@ public class DbComparer : DbObjectHandler
         Serilog.Log.Information("Procs:");
 
         // Step 4 - Loop over each procedure and compare
-        foreach (var proc in procedures)
+        Parallel.ForEach(procedures, _parallelOptions, proc =>
         {
             if (ignoredObjects.Any(ignore => ignore.EndsWith(".*") ? proc.StartsWith(ignore[..^2] + ".") : proc == ignore))
             {
                 Log.Information($"{proc}: Ignored");
-                continue;
+                return;
             }
             string[] parts = proc.Split('.');
             string schema = parts.Length > 1 ? parts[0] : "dbo";
@@ -217,7 +218,7 @@ public class DbComparer : DbObjectHandler
                 DifferencesFile = isDifferencesVisible ? Path.Combine(safeSchema, differencesFile) : null,
                 NewFile = wasAltered ? Path.Combine(safeSchema, newFile) : null
             });
-        }
+        });
 
         // Step 10 - Generate summary report
         (string procReportHtml, string procCount) = HtmlReportWriter.WriteSummaryReport(sourceServer, destinationServer, Path.Combine(proceduresFolderPath, "index.html"), results, filter, run, isIgnoredEmpty,ignoredCount);
