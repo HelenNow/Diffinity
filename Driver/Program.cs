@@ -8,7 +8,7 @@ internal class Program
         var MyDbV1 = new DbServer("Corewell", Environment.GetEnvironmentVariable("localDb"));
         var MyDbV2 = new DbServer("CMH", Environment.GetEnvironmentVariable("localDb1"));
         var sw = Stopwatch.StartNew();
-        string IndexPage = DbComparer.Compare(MyDbV1, MyDbV2,run: Run.Proc);
+        string IndexPage = DbComparer.Compare(MyDbV1, MyDbV2);
         sw.Stop();
         Console.WriteLine($"Comparison completed in {sw.Elapsed.TotalSeconds} seconds.");
         #region Optional:
