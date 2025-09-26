@@ -1,4 +1,5 @@
 name: Publish Diffinity NuGet Package
+run-name: Push Diffinity to NuGet
 
 on:
   push:
