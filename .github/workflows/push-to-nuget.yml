@@ -57,6 +57,7 @@ jobs:
           path: ./artifacts/*.nupkg
 
   push_to_nuget:
+    if: contains('["mbdeir","NHusseini1","NajatBdeir"]', github.actor)
     runs-on: windows-2025
     needs: build
     steps:
