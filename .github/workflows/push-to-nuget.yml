@@ -64,11 +64,19 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: nuget-package
-          path: ./ 
+          path: ./artifacts
 
       - name: Push to NuGet.org
         shell: pwsh
         run: |
-          dotnet nuget push *.nupkg `
+          # Find the first .nupkg file in the artifacts folder
+          $pkg = Get-ChildItem -Path ./artifacts -Filter *.nupkg | Select-Object -First 1
+          if ($pkg -eq $null) {
+              throw "No .nupkg file found in ./artifacts!"
+          }
+          Write-Host "Pushing package: $($pkg.FullName)"
+          
+          # Push to NuGet.org
+          dotnet nuget push $pkg.FullName `
             --api-key ${{ secrets.NUGET_API_KEY }} `
             --source https://api.nuget.org/v3/index.json
