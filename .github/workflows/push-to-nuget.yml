@@ -1,6 +1,9 @@
 name: Publish Diffinity NuGet Package
 run-name: Push Diffinity to NuGet
 
+permissions:
+  contents: write
+
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -92,3 +95,5 @@ jobs:
           git add ${{ env.PROJECT_PATH }}
           git commit -m "chore: bump version to ${{ needs.build.outputs.version }}"
           git push origin HEAD:${{ github.head_ref }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
