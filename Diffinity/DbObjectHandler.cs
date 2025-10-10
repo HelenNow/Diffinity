@@ -3,12 +3,24 @@ using Diffinity.TableHelper;
 using Microsoft.Data.SqlClient;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Diffinity;
 
 public class DbObjectHandler
 {
-    public static bool AreBodiesEqual(string body1, string body2)
+public static string ShowProcAsCreateOrAlter(string sql)
+{
+    if (string.IsNullOrWhiteSpace(sql)) return sql;
+    //If it already has Create or Alter
+    if (Regex.IsMatch(sql, @"(?is)\bCREATE\s+OR\s+ALTER\s+PROC(?:EDURE)?\b"))
+        return sql;
+    //Changing the create to create or alter
+    var re = new Regex(@"(?is)\bCREATE\s+(PROC(?:EDURE)?)\b");
+    return re.Replace(sql, m => $"CREATE OR ALTER {m.Groups[1].Value}", 1);
+}
+
+public static bool AreBodiesEqual(string body1, string body2)
     {
         /// <summary>
         /// Compares two database object definitions (bodies) for equality.

@@ -202,13 +202,17 @@ public class DbComparer : DbObjectHandler
                 Directory.CreateDirectory(schemaFolder);
                 string sourcePath = Path.Combine(schemaFolder, sourceFile);
                 string destinationPath = Path.Combine(schemaFolder, destinationFile);
-                HtmlReportWriter.WriteBodyHtml(sourcePath, $"{sourceServer.name}", sourceBody, returnPage);
-                HtmlReportWriter.WriteBodyHtml(destinationPath, $"{destinationServer.name}", destinationBody, returnPage);
+                // Display procedure definitions as CREATE OR ALTER
+                string displaySourceBody = DbObjectHandler.ShowProcAsCreateOrAlter(sourceBody);
+                string displayDestinationBody = DbObjectHandler.ShowProcAsCreateOrAlter(destinationBody);
+                HtmlReportWriter.WriteBodyHtml(sourcePath, $"{sourceServer.name}", displaySourceBody, returnPage);
+                HtmlReportWriter.WriteBodyHtml(destinationPath, $"{destinationServer.name}", displayDestinationBody, returnPage);
+
 
                 if (!isDestinationEmpty && !areEqual)
                 {
                     string differencesPath = Path.Combine(schemaFolder, differencesFile);
-                    HtmlReportWriter.DifferencesWriter(differencesPath, sourceServer.name, destinationServer.name, sourceBody, destinationBody, "Differences", proc, returnPage);
+                    HtmlReportWriter.DifferencesWriter(differencesPath, sourceServer.name, destinationServer.name, DbObjectHandler.ShowProcAsCreateOrAlter(sourceBody),DbObjectHandler.ShowProcAsCreateOrAlter(destinationBody), "Differences", proc, returnPage);
                     isDifferencesVisible = true;
                 }
                 isVisible = true;
@@ -223,7 +227,7 @@ public class DbComparer : DbObjectHandler
                 AlterDbObject(destinationServer.connectionString, sourceBody, destinationBody);
                 (_, destinationNewBody) = ProcedureFetcher.GetProcedureBody(sourceServer.connectionString, destinationServer.connectionString, schema, proc);
                 string newPath = Path.Combine(schemaFolder, newFile);
-                HtmlReportWriter.WriteBodyHtml(newPath, $"New {destinationServer.name}", destinationNewBody, returnPage);
+                HtmlReportWriter.WriteBodyHtml(newPath, $"New {destinationServer.name}", DbObjectHandler.ShowProcAsCreateOrAlter(destinationNewBody), returnPage);
                 wasAltered = true;
             }
 
