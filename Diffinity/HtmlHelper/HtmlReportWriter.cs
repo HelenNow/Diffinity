@@ -629,12 +629,12 @@ public static class HtmlReportWriter
     /// <summary>
     /// Writes a detailed summary report comparing objects (procedures, views, tables) between source and destination.
     /// </summary>
-    public static (string html, string countObjects) WriteSummaryReport(DbServer sourceServer, DbServer destinationServer, string summaryPath, List<dbObjectResult> results, DbObjectFilter filter, Run run, bool isIgnoredEmpty,string ignoredCount)
+    public static (string html, string countObjects) WriteSummaryReport(DbServer sourceServer, DbServer destinationServer, string summaryPath, List<dbObjectResult> results, DbObjectFilter filter, Run run, bool isIgnoredEmpty, string ignoredCount)
     {
         StringBuilder html = new();
         var result = results[0];
         string returnPage = Path.Combine("..", "index.html");
-        html.Append(ComparisonTemplate.Replace("{source}", sourceServer.name).Replace("{destination}", destinationServer.name).Replace("{MetaData}", result.Type).Replace("{nav}", BuildNav(run, isIgnoredEmpty,ignoredCount)));
+        html.Append(ComparisonTemplate.Replace("{source}", sourceServer.name).Replace("{destination}", destinationServer.name).Replace("{MetaData}", result.Type).Replace("{nav}", BuildNav(run, isIgnoredEmpty, ignoredCount)));
 
         #region 1-Create the new table
         var newObjects = results.Where(r => r.IsDestinationEmpty).ToList();
@@ -689,7 +689,7 @@ public static class HtmlReportWriter
                 </script>"
             );
             html.Replace("{NewTable}", newTable.ToString());
-     
+
         }
         else
         {
@@ -701,33 +701,193 @@ public static class HtmlReportWriter
         int Number = 1;
         var existingObjects = results.Where(r => !r.IsDestinationEmpty).ToList();
         html.AppendLine($@"<h2 style = ""color: #B42A68;"">Changed {result.Type}s :</h2>");
+        // Base folder for resolving relative html paths
+        var summaryDir = Path.GetDirectoryName(summaryPath) ?? summaryPath;
         foreach (var item in existingObjects)
         {
-                html.Replace("{differences}", "<th>Changes</th>");
-                // Prepare file links
-                string sourceColumn = item.SourceFile != null ? $@"<a href=""{item.SourceFile}"">View</a>" : "—";
-                string destinationColumn = item.DestinationFile != null ? $@"<a href=""{item.DestinationFile}"">View</a>" : "—";
-                string differencesColumn = item.DifferencesFile != null ? $@"<a href=""{item.DifferencesFile}"">View</a>" : "—";
-                string newColumn = item.NewFile != null ? $@"<a href=""{item.NewFile}"">View</a>" : "—";
+            html.Replace("{differences}", "<th>Changes</th>");
 
-                if ((item.IsEqual && filter == DbObjectFilter.ShowUnchanged) || !item.IsEqual)
-                {
-                    html.Append($@"<tr>
+            // Build the copy payloads
+            string sourceCopy = item.Type == "Table"
+                ? PrintTableInfo(item.SourceTableInfo, new List<string>())
+                : ReadBodyPayload(summaryDir, item.SourceFile, item.SourceBody);
+
+            string destCopy = item.Type == "Table"
+                ? PrintTableInfo(item.DestinationTableInfo, new List<string>())
+                : ReadBodyPayload(summaryDir, item.DestinationFile, null);
+
+            // HTML-encode before injecting into the hidden span
+            string safeSourceCopy = System.Web.HttpUtility.HtmlEncode(sourceCopy ?? string.Empty);
+            string safeDestCopy = System.Web.HttpUtility.HtmlEncode(destCopy ?? string.Empty);
+
+            string sourceColumn = item.SourceFile != null
+                ? $@"<a href=""{item.SourceFile}"">View</a>
+         <button class=""icon-btn"" onclick=""copyPane(this)"" aria-label=""Copy"" title=""Copy"">
+           <svg viewBox=""0 0 24 24"" width=""18"" height=""18"" fill=""#000"" aria-hidden=""true"">
+             <path d=""M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z""/>
+           </svg>
+         </button>
+         <span class=""copy-target"" style=""display:none;"">{safeSourceCopy}</span>"
+                : "—";
+
+            string destinationColumn = item.DestinationFile != null
+                ? $@"<a href=""{item.DestinationFile}"">View</a>
+         <button class=""icon-btn"" onclick=""copyPane(this)"" aria-label=""Copy"" title=""Copy"">
+           <svg viewBox=""0 0 24 24"" width=""18"" height=""18"" fill=""#000"" aria-hidden=""true"">
+             <path d=""M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z""/>
+           </svg>
+         </button>
+         <span class=""copy-target"" style=""display:none;"">{safeDestCopy}</span>"
+                : "—";
+
+
+            string differencesColumn = item.DifferencesFile != null
+                ? $@"<a href=""{item.DifferencesFile}"">View</a>"
+                : "—";
+
+
+            if ((item.IsEqual && filter == DbObjectFilter.ShowUnchanged) || !item.IsEqual)
+            {
+                html.Append($@"<tr>
                     <td>{Number}</td>
                     <td>{item.schema}.{item.Name}</td>
                     <td>{sourceColumn}</td>
                     <td>{destinationColumn}</td>
                     <td>{differencesColumn}</td>
                      </tr>");
-                    Number++;
-                }
+                Number++;
+            }
+            html.AppendLine(@"
+            <script>
+            function copyPane(button) {
+              const td = button.closest('td, tr');
+              const codeBlock = td && td.querySelector('.copy-target');
+              const text = (codeBlock && codeBlock.innerText || '').trim();
+              if (!text) return;
+
+              // cache original icon & title to restore later
+              const originalHTML = button.innerHTML;
+              const originalTitle = button.title;
+
+              navigator.clipboard.writeText(text).then(() => {
+                // swap to a checkmark icon
+                button.title = 'Copied!';
+                button.innerHTML = `
+                  <svg viewBox=""0 0 24 24"" width=""18"" height=""18"" fill=""#000"" aria-hidden=""true"">
+                    <path d=""M9 16.17l-3.88-3.88-1.41 1.41L9 19l12.71-12.71-1.41-1.41z""/>
+                  </svg>
+                `;
+                button.classList.add('copied'); // optional visual cue
+
+                setTimeout(() => {
+                  // restore original icon and title
+                  button.innerHTML = originalHTML;
+                  button.title = originalTitle || 'Copy';
+                  button.classList.remove('copied');
+                }, 1200); // show check for ~1.2s
+              }).catch(err => {
+                console.error('Copy failed:', err);
+                alert('Failed to copy!');
+              });
+            }
+            </script>
+
+
+            </script>");
+
         }
+
         html.Append($@"</table>
                        <br>
                        <a href=""{returnPage}"" class=""return-btn"">Return to Index</a>
                        </body>
                        </html>");
         #endregion
+
+        static string ReadBodyPayload(string baseDir, string? htmlRelativePath, string? fallbackPlainText)
+        {
+            if (!string.IsNullOrWhiteSpace(fallbackPlainText))
+                return fallbackPlainText;
+
+            if (string.IsNullOrWhiteSpace(htmlRelativePath))
+                return string.Empty;
+
+            try
+            {
+                string fullPath = Path.IsPathRooted(htmlRelativePath)
+                    ? htmlRelativePath
+                    : Path.Combine(baseDir, htmlRelativePath);
+
+                if (!File.Exists(fullPath))
+                    return string.Empty;
+
+                string html = File.ReadAllText(fullPath);
+
+                // --- locate <span class="copy-target"> (handles nested spans safely) ---
+                var open = Regex.Match(
+                    html,
+                    "<span\\s+[^>]*class=(?:\"|')(?=[^\"']*\\bcopy-target\\b)[^\"']*(?:\"|')[^>]*>",
+                    RegexOptions.IgnoreCase);
+
+                if (!open.Success)
+                {
+                    var alt = Regex.Match(html, "<div\\s+[^>]*class=(?:\"|')[^\"']*\\bcode-scroll\\b[^\"']*(?:\"|')[^>]*>", RegexOptions.IgnoreCase);
+                    if (!alt.Success) return string.Empty;
+
+                    string innerAlt = ExtractBalanced(html, alt.Index + alt.Length, "div");
+                    return HtmlDecodeAndStrip(innerAlt);
+                }
+
+                string inner = ExtractBalanced(html, open.Index + open.Length, "span");
+                return HtmlDecodeAndStrip(inner);
+            }
+            catch
+            {
+                return string.Empty;
+            }
+
+            // ---- local helpers ----
+            static string HtmlDecodeAndStrip(string s)
+            {
+                if (string.IsNullOrEmpty(s)) return string.Empty;
+                string noTags = Regex.Replace(s, "<[^>]+>", string.Empty, RegexOptions.Singleline);
+                return System.Net.WebUtility.HtmlDecode(noTags).Trim();
+            }
+
+            static string ExtractBalanced(string text, int startContentIdx, string tagName)
+            {
+                int depth = 1;
+                int pos = startContentIdx;
+                while (pos < text.Length && depth > 0)
+                {
+                    int nextOpen = IndexOfTag(text, "<" + tagName, pos);
+                    int nextClose = IndexOfTag(text, "</" + tagName, pos);
+
+                    if (nextClose == -1 && nextOpen == -1) break;
+                    if (nextClose != -1 && (nextOpen == -1 || nextClose < nextOpen))
+                    {
+                        depth--;
+                        pos = nextClose + tagName.Length + 3;
+                        if (depth == 0)
+                            return text.Substring(startContentIdx, nextClose - startContentIdx);
+                    }
+                    else
+                    {
+                        depth++;
+                        int endOpen = text.IndexOf('>', nextOpen);
+                        pos = (endOpen == -1) ? text.Length : (endOpen + 1);
+                    }
+                }
+                int naiveEnd = text.IndexOf("</" + tagName + ">", startContentIdx, StringComparison.OrdinalIgnoreCase);
+                return naiveEnd > startContentIdx
+                    ? text.Substring(startContentIdx, naiveEnd - startContentIdx)
+                    : string.Empty;
+
+                static int IndexOfTag(string src, string token, int start)
+                    => src.IndexOf(token, start, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
 
         #region 3-Update counts in the nav bar
         int newObjectsCount = newObjects.Count();
@@ -752,7 +912,7 @@ public static class HtmlReportWriter
         StringBuilder html = new();
         string returnPage = Path.Combine("..", "index.html");
         string ignoredCount = ignoredObjects.Count().ToString();
-        html.Append(IgnoredTemplate.Replace("{nav}", BuildNav(run, false,ignoredCount)));
+        html.Append(IgnoredTemplate.Replace("{nav}", BuildNav(run, false, ignoredCount)));
 
         #region Create the Ignored Table
         int Number = 1;
@@ -1109,7 +1269,7 @@ public static class HtmlReportWriter
     /// <summary>
     /// Write the nav section in the comparison summary pages
     /// </summary>
-    static string BuildNav(Run run, bool isIgnoredEmpty,string count)
+    static string BuildNav(Run run, bool isIgnoredEmpty, string count)
     {
         string proceduresPath = "../Procedures/index.html";
         string viewsPath = "../Views/index.html";

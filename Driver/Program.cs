@@ -5,11 +5,10 @@ internal class Program
 {
     static void Main(string[] args)
     {
-        var DEV002   = new DbServer("DEV002", Environment.GetEnvironmentVariable("dev2cs"));
-        var Corewell = new DbServer("Corewell", Environment.GetEnvironmentVariable("connectionString"));
-        var CMH      = new DbServer("CMH", Environment.GetEnvironmentVariable("cmhCs"));
+        var localdb1   = new DbServer("localdb1", Environment.GetEnvironmentVariable("db1Cs"));
+        var localdb2 = new DbServer("localdb2", Environment.GetEnvironmentVariable("db2Cs"));
         
-        string IndexPage = DbComparer.Compare(DEV002,CMH);
+        string IndexPage = DbComparer.Compare(localdb1, localdb2);
         #region Optional
         // You can optionally pass any of the following parameters:
         // logger: your custom ILogger instance
