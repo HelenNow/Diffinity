@@ -5,8 +5,6 @@ using Diffinity.ViewHelper;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using System.Diagnostics;
-using static Diffinity.DbComparer;
-
 
 namespace Diffinity;
 public enum ComparerAction

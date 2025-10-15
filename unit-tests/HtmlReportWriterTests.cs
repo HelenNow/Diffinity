@@ -1,9 +1,5 @@
 ﻿using Diffinity;
 using Diffinity.HtmlHelper;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using Xunit;
 
 public class HtmlReportWriterTests : IDisposable
 {
