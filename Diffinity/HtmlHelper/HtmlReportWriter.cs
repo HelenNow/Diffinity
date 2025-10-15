@@ -213,14 +213,15 @@ public static class HtmlReportWriter
     <h1>[{source}] vs [{destination}] </h1>
     {nav}
     {NewTable}
-    <table>
-        <tr>
-            <th></th>
-            <th>{MetaData} Name</th>
-            <th>{source} Original</th>
-            <th>{destination} Original</th>
-            {differences}
-        </tr>
+<table>
+    <tr>
+        <th></th>
+        <th>{MetaData} Name</th>
+        <th>{source} Original</th>
+        <th>{destination} Original</th>
+        <th>Changes</th>
+        <th class=""done-col"">Done</th>
+    </tr>
     ";
     private const string IgnoredTemplate = @"
 <!DOCTYPE html>
@@ -635,7 +636,39 @@ public static class HtmlReportWriter
         var result = results[0];
         string returnPage = Path.Combine("..", "index.html");
         html.Append(ComparisonTemplate.Replace("{source}", sourceServer.name).Replace("{destination}", destinationServer.name).Replace("{MetaData}", result.Type).Replace("{nav}", BuildNav(run, isIgnoredEmpty,ignoredCount)));
+        html.AppendLine(@"
+        <style>
+          .row-done { background:#eee; }
+          .row-done td { opacity:.6; }
+          .done-col { text-align:center; width:80px; }
+          .done-col input { vertical-align:middle; }
+        </style>");
 
+
+
+        html.AppendLine(@"
+        <script>
+          function toggleRow(cb){
+              const tr = cb.closest('tr');
+              if (cb.checked) {
+                  tr.classList.add('row-done');
+                  localStorage.setItem(cb.dataset.key, '1');
+              } else {
+                  tr.classList.remove('row-done');
+                  localStorage.setItem(cb.dataset.key, '0');
+              }
+          }
+          function restoreAll(){
+              document.querySelectorAll('input.mark-done').forEach(cb => {
+                  const v = localStorage.getItem(cb.dataset.key);
+                  if (v === '1') {
+                      cb.checked = true;
+                      cb.closest('tr').classList.add('row-done');
+                  }
+              });
+          }
+          document.addEventListener('DOMContentLoaded', restoreAll);
+        </script>");
         #region 1-Create the new table
         var newObjects = results.Where(r => r.IsDestinationEmpty).ToList();
         if (newObjects.Any())
@@ -648,6 +681,7 @@ public static class HtmlReportWriter
                     <th>{result.Type} Name</th>
                     <th></th>
                     <th></th>
+                    <th class=""done-col"">Done</th>
                 </tr>");
 
             int newCount = 1;
@@ -657,15 +691,21 @@ public static class HtmlReportWriter
                 string sourceBody = item.Type == "Table" ? PrintTableInfo(item.SourceTableInfo, new List<string>()) : item.SourceBody;
 
 
-                string sourceLink = $@"<a href=""{item.SourceFile}"">View</a";
+                string sourceLink = $@"<a href=""{item.SourceFile}"">View</a>";
                 string copyButton = $@"<button class=""copy-btn"" onclick=""copyPane(this)"">Copy</button><br>
                        <span class=""copy-target"" style=""display:none;"">{sourceBody}</span>";
 
-                newTable.Append($@"<tr>
+                newTable.Append($@"<tr data-key=""new|{result.Type}|{item.schema}.{item.Name}"">
                                 <td>{newCount}</td>
                                 <td>{item.schema}.{item.Name}</td>
                                 <td>{sourceLink}</td>
                                 <td>{copyButton}</td>
+                                <td class=""done-col"">
+                                    <input type=""checkbox""
+                                           class=""mark-done""
+                                           onchange=""toggleRow(this)""
+                                           data-key=""new|{result.Type}|{item.schema}.{item.Name}"">
+                                </td>
                                 </tr>");
                 newCount++;
             }
@@ -673,20 +713,19 @@ public static class HtmlReportWriter
             newTable.Append("</table><br><br>");
             newTable.AppendLine(
                 @"<script>
-                    function copyPane(button) {
-                        const container = button.closest('tr');
-                        const codeBlock = container.querySelector('.copy-target');
-                        const text = codeBlock?.innerText.trim();
-
-                        navigator.clipboard.writeText(text).then(() => {
-                            button.textContent = 'Copied!';
-                            setTimeout(() => button.textContent = 'Copy', 2000);
-                        }).catch(err => {
-                            console.error('Copy failed:', err);
-                            alert('Failed to copy!');
-                        });
-                     }
-                </script>"
+        function copyPane(button) {
+            const container = button.closest('tr');
+            const codeBlock = container.querySelector('.copy-target');
+            const text = codeBlock?.innerText.trim();
+            navigator.clipboard.writeText(text).then(() => {
+                button.textContent = 'Copied!';
+                setTimeout(() => button.textContent = 'Copy', 2000);
+            }).catch(err => {
+                console.error('Copy failed:', err);
+                alert('Failed to copy!');
+            });
+        }
+      </script>"
             );
             html.Replace("{NewTable}", newTable.ToString());
      
@@ -703,24 +742,28 @@ public static class HtmlReportWriter
         html.AppendLine($@"<h2 style = ""color: #B42A68;"">Changed {result.Type}s :</h2>");
         foreach (var item in existingObjects)
         {
-                html.Replace("{differences}", "<th>Changes</th>");
                 // Prepare file links
                 string sourceColumn = item.SourceFile != null ? $@"<a href=""{item.SourceFile}"">View</a>" : "—";
                 string destinationColumn = item.DestinationFile != null ? $@"<a href=""{item.DestinationFile}"">View</a>" : "—";
                 string differencesColumn = item.DifferencesFile != null ? $@"<a href=""{item.DifferencesFile}"">View</a>" : "—";
                 string newColumn = item.NewFile != null ? $@"<a href=""{item.NewFile}"">View</a>" : "—";
 
-                if ((item.IsEqual && filter == DbObjectFilter.ShowUnchanged) || !item.IsEqual)
-                {
-                    html.Append($@"<tr>
-                    <td>{Number}</td>
-                    <td>{item.schema}.{item.Name}</td>
-                    <td>{sourceColumn}</td>
-                    <td>{destinationColumn}</td>
-                    <td>{differencesColumn}</td>
-                     </tr>");
-                    Number++;
-                }
+            if ((item.IsEqual && filter == DbObjectFilter.ShowUnchanged) || !item.IsEqual)
+            {
+                html.Append($@"<tr data-key=""changed|{result.Type}|{item.schema}.{item.Name}"">
+                <td>{Number}</td>
+                <td>{item.schema}.{item.Name}</td>
+                <td>{sourceColumn}</td>
+                <td>{destinationColumn}</td>
+                <td>{differencesColumn}</td>
+                <td class=""done-col"">
+                    <input type=""checkbox"" class=""mark-done""
+                           onchange=""toggleRow(this)""
+                           data-key=""changed|{result.Type}|{item.schema}.{item.Name}"">
+                </td>
+                </tr>");
+                Number++;
+            }
         }
         html.Append($@"</table>
                        <br>
