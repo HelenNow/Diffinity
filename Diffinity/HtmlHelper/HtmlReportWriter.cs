@@ -206,6 +206,10 @@ public static class HtmlReportWriter
         .return-btn:hover {
             background-color: #b42a68;
         }
+        .pick { display:inline-flex; align-items:center; gap:8px; }
+        .copy-Section { display:flex; gap:12px; justify-content:flex-end; margin:10px 0 6px 0; }
+        .hdr { display:inline-flex; align-items:center; gap:8px; }
+
     </style>
 </head>
 <body>
@@ -213,12 +217,17 @@ public static class HtmlReportWriter
     <h1>[{source}] vs [{destination}] </h1>
     {nav}
     {NewTable}
+    {copySection}
     <table>
         <tr>
             <th></th>
             <th>{MetaData} Name</th>
-            <th>{source} Original</th>
-            <th>{destination} Original</th>
+            <th>
+                <label class=""hdr""><input type=""checkbox"" id=""chk-src-all""><span>{source} Original</span></label>
+            </th>
+            <th>
+                <label class=""hdr""><input type=""checkbox"" id=""chk-dst-all""><span>{destination} Original</span></label>
+            </th>
             {differences}
         </tr>
     ";
@@ -635,6 +644,14 @@ public static class HtmlReportWriter
         var result = results[0];
         string returnPage = Path.Combine("..", "index.html");
         html.Append(ComparisonTemplate.Replace("{source}", sourceServer.name).Replace("{destination}", destinationServer.name).Replace("{MetaData}", result.Type).Replace("{nav}", BuildNav(run, isIgnoredEmpty,ignoredCount)));
+        // Build the bulk copy toolbar (only if there are any changed objects)
+        var existingObjects = results.Where(r => !r.IsDestinationEmpty).ToList();
+        string copySection = existingObjects.Any()
+           ? $@"<div class=""copy-Section"" style=""display:flex;justify-content:flex-end;margin:10px 0 6px 0;"">
+        <button id=""copyAll"" class=""copy-btn"">Copy Selected</button>
+      </div>"
+           : string.Empty;
+        html.Replace("{copySection}", copySection);
 
         #region 1-Create the new table
         var newObjects = results.Where(r => r.IsDestinationEmpty).ToList();
@@ -689,7 +706,7 @@ public static class HtmlReportWriter
                 </script>"
             );
             html.Replace("{NewTable}", newTable.ToString());
-     
+
         }
         else
         {
@@ -699,34 +716,204 @@ public static class HtmlReportWriter
 
         #region 2-Create the Comparison Table
         int Number = 1;
-        var existingObjects = results.Where(r => !r.IsDestinationEmpty).ToList();
         html.AppendLine($@"<h2 style = ""color: #B42A68;"">Changed {result.Type}s :</h2>");
         foreach (var item in existingObjects)
         {
-                html.Replace("{differences}", "<th>Changes</th>");
-                // Prepare file links
-                string sourceColumn = item.SourceFile != null ? $@"<a href=""{item.SourceFile}"">View</a>" : "—";
-                string destinationColumn = item.DestinationFile != null ? $@"<a href=""{item.DestinationFile}"">View</a>" : "—";
-                string differencesColumn = item.DifferencesFile != null ? $@"<a href=""{item.DifferencesFile}"">View</a>" : "—";
-                string newColumn = item.NewFile != null ? $@"<a href=""{item.NewFile}"">View</a>" : "—";
+            html.Replace("{differences}", "<th>Changes</th>");
+            // --- Build plain-text payloads we will bulk-copy ---
+            string summaryDir = Path.GetDirectoryName(summaryPath) ?? summaryPath;
+            string srcPlain = item.Type == "Table"
+                ? PrintTableInfo(item.SourceTableInfo ?? new List<tableDto>(), new List<string>())
+                : ReadBodyPayload(summaryDir, item.SourceFile, null);
+            string dstPlain = item.Type == "Table"
+                ? PrintTableInfo(item.DestinationTableInfo ?? new List<tableDto>(), new List<string>())
+                : ReadBodyPayload(summaryDir, item.DestinationFile, null);
+            // HTML-encode before embedding inside hidden spans
+            string srcEnc = System.Net.WebUtility.HtmlEncode(srcPlain ?? string.Empty);
+            string dstEnc = System.Net.WebUtility.HtmlEncode(dstPlain ?? string.Empty);
+            // Source cell: checkbox + View + hidden payload
+            string sourceColumn = item.SourceFile != null
+                ? $@"<label class='pick'>
+            <input type='checkbox' class='sel-src'>
+            <a href=""{item.SourceFile}"">View</a>
+        </label>
+        <span class='copy-src' style='display:none;'>{srcEnc}</span>"
+                : "—";
+            // Destination cell: checkbox + View + hidden payload
+            string destinationColumn = item.DestinationFile != null
+                ? $@"<label class='pick'>
+            <input type='checkbox' class='sel-dst'>
+            <a href=""{item.DestinationFile}"">View</a>
+        </label>
+        <span class='copy-dst' style='display:none;'>{dstEnc}</span>"
+                : "—";
+            string differencesColumn = item.DifferencesFile != null
+                ? $@"<a href=""{item.DifferencesFile}"">View</a>"
+                : "—";
+            string newColumn = item.NewFile != null ? $@"<a href=""{item.NewFile}"">View</a>" : "—";
 
-                if ((item.IsEqual && filter == DbObjectFilter.ShowUnchanged) || !item.IsEqual)
-                {
-                    html.Append($@"<tr>
+            if ((item.IsEqual && filter == DbObjectFilter.ShowUnchanged) || !item.IsEqual)
+            {
+                html.Append($@"<tr>
                     <td>{Number}</td>
                     <td>{item.schema}.{item.Name}</td>
                     <td>{sourceColumn}</td>
                     <td>{destinationColumn}</td>
                     <td>{differencesColumn}</td>
                      </tr>");
-                    Number++;
+                Number++;
+            }
+            // ------- local helper -------
+            static string ReadBodyPayload(string baseDir, string? htmlRelativePath, string? fallbackPlainText)
+            {
+                if (!string.IsNullOrWhiteSpace(fallbackPlainText))
+                    return fallbackPlainText;
+
+                if (string.IsNullOrWhiteSpace(htmlRelativePath))
+                    return string.Empty;
+
+                try
+                {
+                    string fullPath = Path.IsPathRooted(htmlRelativePath)
+                        ? htmlRelativePath
+                        : Path.Combine(baseDir, htmlRelativePath);
+
+                    if (!File.Exists(fullPath))
+                        return string.Empty;
+
+                    string html = File.ReadAllText(fullPath);
+
+                    // Prefer <span class="copy-target">...</span>
+                    var spanOpen = Regex.Match(
+                        html,
+                        "<span\\s+[^>]*class=(?:\"|')(?=[^\"']*\\bcopy-target\\b)[^\"']*(?:\"|')[^>]*>",
+                        RegexOptions.IgnoreCase);
+
+                    if (spanOpen.Success)
+                    {
+                        string inner = ExtractBalanced(html, spanOpen.Index + spanOpen.Length, "span");
+                        return StripAndDecode(inner);
+                    }
+
+                    // Fallback: <div class="code-scroll">...</div>
+                    var divOpen = Regex.Match(
+                        html,
+                        "<div\\s+[^>]*class=(?:\"|')[^\"']*\\bcode-scroll\\b[^\"']*(?:\"|')[^>]*>",
+                        RegexOptions.IgnoreCase);
+
+                    if (divOpen.Success)
+                    {
+                        string inner = ExtractBalanced(html, divOpen.Index + divOpen.Length, "div");
+                        return StripAndDecode(inner);
+                    }
+
+                    return string.Empty;
                 }
+                catch
+                {
+                    return string.Empty;
+                }
+
+                static string StripAndDecode(string s)
+                {
+                    if (string.IsNullOrEmpty(s)) return string.Empty;
+                    string noTags = Regex.Replace(s, "<[^>]+>", string.Empty, RegexOptions.Singleline);
+                    return System.Net.WebUtility.HtmlDecode(noTags).Trim();
+                }
+
+                static string ExtractBalanced(string text, int startContentIdx, string tagName)
+                {
+                    int depth = 1, pos = startContentIdx;
+                    while (pos < text.Length && depth > 0)
+                    {
+                        int nextOpen = text.IndexOf("<" + tagName, pos, StringComparison.OrdinalIgnoreCase);
+                        int nextClose = text.IndexOf("</" + tagName, pos, StringComparison.OrdinalIgnoreCase);
+
+                        if (nextClose == -1 && nextOpen == -1) break;
+                        if (nextClose != -1 && (nextOpen == -1 || nextClose < nextOpen))
+                        {
+                            depth--;
+                            if (depth == 0) return text.Substring(startContentIdx, nextClose - startContentIdx);
+                            pos = nextClose + tagName.Length + 3;
+                        }
+                        else
+                        {
+                            depth++;
+                            int endOpen = text.IndexOf('>', nextOpen);
+                            pos = (endOpen == -1) ? text.Length : (endOpen + 1);
+                        }
+                    }
+                    int naiveEnd = text.IndexOf("</" + tagName + ">", startContentIdx, StringComparison.OrdinalIgnoreCase);
+                    return naiveEnd > startContentIdx ? text.Substring(startContentIdx, naiveEnd - startContentIdx) : string.Empty;
+                }
+            }
+
         }
         html.Append($@"</table>
-                       <br>
-                       <a href=""{returnPage}"" class=""return-btn"">Return to Index</a>
-                       </body>
-                       </html>");
+    <br>
+    <a href=""{returnPage}"" class=""return-btn"">Return to Index</a>
+
+     <script>
+    (function() {{
+      // per-column select-all in the header (optional)
+      const srcAll = document.getElementById('chk-src-all');
+      const dstAll = document.getElementById('chk-dst-all');
+
+      if (srcAll) {{
+        srcAll.addEventListener('change', () => {{
+          document.querySelectorAll('.sel-src').forEach(cb => cb.checked = srcAll.checked);
+        }});
+      }}
+      if (dstAll) {{
+        dstAll.addEventListener('change', () => {{
+          document.querySelectorAll('.sel-dst').forEach(cb => cb.checked = dstAll.checked);
+        }});
+      }}
+
+      // gather everything that is checked
+      function collectAll() {{
+        const rows = Array.from(document.querySelectorAll('table tr')).slice(1);
+        const parts = [];
+        rows.forEach(tr => {{
+          const srcCb = tr.querySelector('.sel-src');
+          const dstCb = tr.querySelector('.sel-dst');
+          if (srcCb && srcCb.checked) {{
+            const span = tr.querySelector('.copy-src');
+            const txt = (span && span.innerText || '').trim();
+            if (txt) parts.push(txt);
+          }}
+          if (dstCb && dstCb.checked) {{
+            const span = tr.querySelector('.copy-dst');
+            const txt = (span && span.innerText || '').trim();
+            if (txt) parts.push(txt);
+          }}
+        }});
+        // one blank line between scripts
+        return parts.join('\n\n');
+      }}
+
+      const btn = document.getElementById('copyAll');
+      if (btn) {{
+        btn.addEventListener('click', () => {{
+          const blob = collectAll();
+          if (!blob) {{
+            alert('No items selected.');
+            return;
+          }}
+          navigator.clipboard.writeText(blob).then(() => {{
+            const old = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = old, 1200);
+          }}).catch(err => {{
+            console.error('Copy failed:', err);
+            alert('Failed to copy!');
+          }});
+        }});
+      }}
+    }})();
+    </script>
+    </body>
+    </html>");
         #endregion
 
         #region 3-Update counts in the nav bar
