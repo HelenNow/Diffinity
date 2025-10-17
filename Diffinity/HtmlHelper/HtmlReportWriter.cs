@@ -508,7 +508,7 @@ public static class HtmlReportWriter
             padding: 0;
             border-radius: 8px;
             overflow: hidden;
-            height: 650px;
+            height: auto;
             border: 1px solid #ddd;
             box-shadow: 0 3px 8px rgba(0, 0, 0, 0.05);
         }
@@ -522,7 +522,7 @@ public static class HtmlReportWriter
             font-size: 1rem;
         }
        .code-scroll {
-            height: 605px;
+            height: 60vh;
             overflow: auto; 
         }
         .code-block {
