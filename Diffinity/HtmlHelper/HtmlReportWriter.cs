@@ -84,6 +84,8 @@ public static class HtmlReportWriter
     <h2>{destinationServer} : {destinationDatabase}</h2>
     <h3>{Date}</h3>
     <h3>{Duration}</h3>
+{countsLegend}
+
     <ul>
         <li>{procsIndex}</li>
         <li>{viewsIndex}</li>
@@ -592,7 +594,7 @@ public static class HtmlReportWriter
     /// <summary>
     /// Writes the main index summary HTML page linking to individual reports for procedures, views, and tables.
     /// </summary>
-    public static string WriteIndexSummary(string sourceConnectionString, string destinationConnectionString, string outputPath, long Duration, string? ignoredIndexPath = null, string? procIndexPath = null, string? viewIndexPath = null, string? tableIndexPath = null)
+    public static string WriteIndexSummary(string sourceConnectionString, string destinationConnectionString, string outputPath, long Duration, string? ignoredIndexPath = null, string? procIndexPath = null, string? viewIndexPath = null, string? tableIndexPath = null, string? procCounts = null, string? viewCounts = null, string? tableCounts = null,string? countsExplanation = null)
     {
         // Extract server and database names from connection strings
         var sourceBuilder = new SqlConnectionStringBuilder(sourceConnectionString);
@@ -609,14 +611,27 @@ public static class HtmlReportWriter
         double minutes = Duration / 60000.0;
         string formattedDuration = $"{minutes:F1} minutes";
 
+        string countsLegend = string.IsNullOrWhiteSpace(countsExplanation)
+            ? ""
+            : $@"<p style=""text-align:center;opacity:.8;margin-top:6px"">{countsExplanation}</p>";
+
+
+        // NEW: button labels with counts
+        string procLabel = "Procedures" + (string.IsNullOrEmpty(procCounts) ? "" : $" ({procCounts})");
+        string viewLabel = "Views" + (string.IsNullOrEmpty(viewCounts) ? "" : $" ({viewCounts})");
+        string tableLabel = "Tables" + (string.IsNullOrEmpty(tableCounts) ? "" : $" ({tableCounts})");
+
+
+
         // Create links to individual index pages
-        string procsIndex = procIndexPath == null ? "" : $@"<a href=""{procIndexPath}"" class=""btn"">Procedures</a>";
-        string viewsIndex = viewIndexPath == null ? "" : $@"<a href=""{viewIndexPath}"" class=""btn"">Views</a>";
-        string tablesIndex = tableIndexPath == null ? "" : $@"<a href=""{tableIndexPath}"" class=""btn"">Tables</a>";
+        string procsIndex = procIndexPath == null ? "" : $@"<a href=""{procIndexPath}""  class=""btn"">{procLabel}</a>";
+        string viewsIndex = viewIndexPath == null ? "" : $@"<a href=""{viewIndexPath}""  class=""btn"">{viewLabel}</a>";
+        string tablesIndex = tableIndexPath == null ? "" : $@"<a href=""{tableIndexPath}"" class=""btn"">{tableLabel}</a>";
+
         string ignoredIndex = ignoredIndexPath == null ? "" : $@"<a href=""{ignoredIndexPath}"" class=""btn"">Ignored</a>";
 
         // Replace placeholders in the index template
-        html.Append(IndexTemplate.Replace("{sourceServer}", sourceServer).Replace("{sourceDatabase}", sourceDatabase).Replace("{destinationServer}", destinationServer).Replace("{destinationDatabase}", destinationDatabase).Replace("{procsIndex}", procsIndex).Replace("{viewsIndex}", viewsIndex).Replace("{tablesIndex}", tablesIndex).Replace("{ignoredIndex}", ignoredIndex).Replace("{Date}", Date).Replace("{Duration}", formattedDuration));
+        html.Append(IndexTemplate.Replace("{sourceServer}", sourceServer).Replace("{sourceDatabase}", sourceDatabase).Replace("{destinationServer}", destinationServer).Replace("{destinationDatabase}", destinationDatabase).Replace("{procsIndex}", procsIndex).Replace("{viewsIndex}", viewsIndex).Replace("{tablesIndex}", tablesIndex).Replace("{ignoredIndex}", ignoredIndex).Replace("{Date}", Date).Replace("{Duration}", formattedDuration).Replace("{countsLegend}", countsLegend));
         string indexPath = Path.Combine(outputPath, "index.html");
 
         // Write to index.html
