@@ -37,6 +37,6 @@ namespace Diffinity;
             }
 
             // Step 3: Compare
-            return TableComparer.CompareTables(source.name, destination.name, tablesDb1, tablesDb2, columnsDb1, columnsDb2);
+            return TableComparer.CompareTables(source.name , destination.name, tablesDb1, tablesDb2, columnsDb1, columnsDb2);
         }
     }
