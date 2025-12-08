@@ -38,7 +38,7 @@ public class TableFetcher
         WHERE i.is_primary_key = 1
     ) pk ON c.object_id = pk.object_id AND c.column_id = pk.column_id
     LEFT JOIN (
-        SELECT fkc.parent_object_id AS object_id, fkc.parent_column_id AS parent_column_id
+        SELECT DISTINCT fkc.parent_object_id AS object_id, fkc.parent_column_id AS parent_column_id
         FROM sys.foreign_key_columns fkc
     ) fk ON c.object_id = fk.object_id AND c.column_id = fk.parent_column_id
     WHERE t.name = @tableName
