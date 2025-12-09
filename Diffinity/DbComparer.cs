@@ -429,6 +429,7 @@ public class DbComparer : DbObjectHandler
         /// Generates HTML reports for schema differences and optionally applies updates to the destination.
         /// </summary>
 
+        object resultsLock = new object();
         // Step 1 - Setup folder structure for reports
         Directory.CreateDirectory(outputFolder);
         string tablesFolderPath = Path.Combine(outputFolder, "Tables");
@@ -442,13 +443,13 @@ public class DbComparer : DbObjectHandler
         List<(string schema, string name)> tables = TableFetcher.GetTablesNames(sourceServer.connectionString).ToList();
 
         List<dbObjectResult> results = new();
-        bool areEqual = false;
 
         Serilog.Log.Information("Tables:");
 
         // Step 4 - Loop over each table and compare
         Parallel.ForEach(tables, parallelOptions, tableTuple =>
         {
+            bool isTableEqual = true;
             string schema = tableTuple.schema;
             string table = tableTuple.name;
             string safeSchema = MakeSafe(schema);
@@ -457,13 +458,9 @@ public class DbComparer : DbObjectHandler
             if (ignoredObjects.Any(ignore =>
             {
                 var parts = ignore.Split('.');
-                var safeParts = parts
-                    .Select(part => part == "*" ? "*" : MakeSafe(part));
+                var safeParts = parts.Select(part => part == "*" ? "*" : MakeSafe(part));
                 var safeIgnore = string.Join(".", safeParts);
-
-                if (ignore.EndsWith(".*"))
-                    return safeIgnore == safeSchema + ".*";
-
+                if (ignore.EndsWith(".*")) return safeIgnore == safeSchema + ".*";
                 return safeIgnore == safeSchema + "." + safeName;
             }))
             {
@@ -476,7 +473,9 @@ public class DbComparer : DbObjectHandler
             List<string> allDifferences = new List<string>();
             (List<tableDto> sourceInfo, List<tableDto> destinationInfo,
              List<ForeignKeyDto> sourceFKs, List<ForeignKeyDto> destFKs) =
-                TableFetcher.GetTableInfo(sourceServer.connectionString, destinationServer.connectionString, schema, table); bool isDestinationEmpty = destinationInfo.IsNullOrEmpty();
+                TableFetcher.GetTableInfo(sourceServer.connectionString, destinationServer.connectionString, schema, table);
+
+            bool isDestinationEmpty = destinationInfo.IsNullOrEmpty();
             int sourceColumnCount = sourceInfo.Count;
             int destinationColumnCount = destinationInfo.Count;
             int minCount = Math.Min(sourceColumnCount, destinationColumnCount);
@@ -487,13 +486,14 @@ public class DbComparer : DbObjectHandler
                 {
                     Serilog.Log.Information($"{table}: Changes detected");
                     allDifferences.Add(table);
+                    isTableEqual = false; 
                     continue;
                 }
 
-                var tableDto = sourceInfo[i];
-                (areEqual, List<string> differences) = TableComparerAndUpdater.ComparerAndUpdater(destinationServer.connectionString, sourceInfo[i], destinationInfo[i], table, makeChange);
-                if (!areEqual)
+                (bool isColEqual, List<string> differences) = TableComparerAndUpdater.ComparerAndUpdater(destinationServer.connectionString, sourceInfo[i], destinationInfo[i], table, makeChange);
+                if (!isColEqual)
                 {
+                    isTableEqual = false;
                     allDifferences.AddRange(differences);
                     Serilog.Log.Information($"{schema}.{table}: Changes detected");
                 }
@@ -504,8 +504,8 @@ public class DbComparer : DbObjectHandler
                 for (int i = destinationColumnCount; i < sourceColumnCount; i++)
                 {
                     allDifferences.Add(sourceInfo[i].columnName);
-                    areEqual = false;
                 }
+                isTableEqual = false;
             }
             // Handle extra columns in destination
             if (destinationColumnCount > sourceColumnCount)
@@ -513,10 +513,11 @@ public class DbComparer : DbObjectHandler
                 for (int i = sourceColumnCount; i < destinationColumnCount; i++)
                 {
                     allDifferences.Add(destinationInfo[i].columnName);
-                    areEqual = false;
                 }
+                isTableEqual = false;
             }
-            if (areEqual)
+
+            if (isTableEqual && !isDestinationEmpty)
             {
                 Serilog.Log.Information($"{schema}.{table}: No Changes");
             }
@@ -533,7 +534,7 @@ public class DbComparer : DbObjectHandler
             bool isVisible = false;
 
             // Step 8 - Write HTML reports if needed
-            if ((areEqual && filter == DbObjectFilter.ShowUnchanged) || !areEqual)
+            if ((isTableEqual && filter == DbObjectFilter.ShowUnchanged) || !isTableEqual)
             {
                 Directory.CreateDirectory(schemaFolder);
                 string sourcePath = Path.Combine(schemaFolder, sourceFile);
@@ -549,7 +550,7 @@ public class DbComparer : DbObjectHandler
                     sourceTableScript = HtmlReportWriter.CreateTableScript(schema, table, sourceInfo, sourceFKs);
                     destTableScript = null;
                 }
-                else if (areEqual)
+                else if (isTableEqual)
                 {
                     sourceTableScript = HtmlReportWriter.CreateTableScript(schema, table, sourceInfo, sourceFKs);
                     destTableScript = HtmlReportWriter.CreateTableScript(schema, table, destinationInfo, destFKs);
@@ -564,7 +565,7 @@ public class DbComparer : DbObjectHandler
                 HtmlReportWriter.WriteBodyHtml(sourcePath, $"{sourceServer.name} Table", HtmlReportWriter.PrintTableInfo(sourceInfo, allDifferences), returnPage, sourceTableScript);
                 HtmlReportWriter.WriteBodyHtml(destinationPath, $"{destinationServer.name} Table", HtmlReportWriter.PrintTableInfo(destinationInfo, allDifferences), returnPage, destTableScript);
 
-                if (!isDestinationEmpty && !areEqual)
+                if (!isDestinationEmpty && !isTableEqual)
                 {
                     string differencesPath = Path.Combine(schemaFolder, differencesFile);
                     HtmlReportWriter.TableDifferencesWriter(
@@ -588,36 +589,42 @@ public class DbComparer : DbObjectHandler
             List<tableDto> destinationNewInfo = destinationInfo;
             bool wasAltered = false;
 
-            if (makeChange == ComparerAction.ApplyChanges)
+            if (makeChange == ComparerAction.ApplyChanges && !isTableEqual)
             {
                 (_, destinationNewInfo, _, var destinationNewFKs) = TableFetcher.GetTableInfo(sourceServer.connectionString, destinationServer.connectionString, schema, table);
                 string newPath = Path.Combine(schemaFolder, newFile);
-                var newTableScript = HtmlReportWriter.CreateTableScript(schema, table, destinationNewInfo, destFKs); HtmlReportWriter.WriteBodyHtml(newPath, $"New {destinationServer.name} Table", HtmlReportWriter.PrintTableInfo(destinationNewInfo, null), returnPage, newTableScript);
+                var newTableScript = HtmlReportWriter.CreateTableScript(schema, table, destinationNewInfo, destFKs);
+                HtmlReportWriter.WriteBodyHtml(newPath, $"New {destinationServer.name} Table", HtmlReportWriter.PrintTableInfo(destinationNewInfo, null), returnPage, newTableScript);
                 wasAltered = true;
             }
 
             // Step 10 - Store result entry for summary
-            results.Add(new dbObjectResult
+            var resultItem = new dbObjectResult
             {
                 Type = "Table",
                 Name = table,
                 schema = schema,
                 IsDestinationEmpty = isDestinationEmpty,
-                IsEqual = areEqual,
+                IsEqual = isTableEqual, 
                 SourceTableInfo = sourceInfo,
                 DestinationTableInfo = destinationInfo,
-                SourceForeignKeys = sourceFKs,       
-                DestinationForeignKeys = destFKs,     
+                SourceForeignKeys = sourceFKs,
+                DestinationForeignKeys = destFKs,
                 SourceFile = isVisible ? Path.Combine(safeSchema, sourceFile) : null,
                 DestinationFile = isVisible ? Path.Combine(safeSchema, destinationFile) : null,
                 DifferencesFile = isDifferencesVisible ? Path.Combine(safeSchema, differencesFile) : null,
                 NewFile = wasAltered ? Path.Combine(safeSchema, newFile) : null
-            });
+            };
+
+            lock (resultsLock)
+            {
+                results.Add(resultItem);
+            }
         });
 
         // Step 11 - Generate summary report
         (string tableHtmlReport, string tablesCount) = HtmlReportWriter.WriteSummaryReport(sourceServer, destinationServer, Path.Combine(tablesFolderPath, "index.html"), results, filter, run, isIgnoredEmpty, ignoredCount);
-        int tableDiffsCount = filter == DbObjectFilter.HideUnchanged ? results.Count(r => (r.IsDestinationEmpty) || (!r.IsDestinationEmpty && !r.IsEqual)) : results.Count(); 
+        int tableDiffsCount = filter == DbObjectFilter.HideUnchanged ? results.Count(r => (r.IsDestinationEmpty) || (!r.IsDestinationEmpty && !r.IsEqual)) : results.Count();
         return new summaryReportDto
         {
             path = "Tables/index.html",
