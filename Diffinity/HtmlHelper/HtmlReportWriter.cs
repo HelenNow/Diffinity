@@ -962,6 +962,7 @@ public static class HtmlReportWriter
     /// </summary>
     public static (string html, string countObjects) WriteSummaryReport(DbServer sourceServer, DbServer destinationServer, string summaryPath, List<dbObjectResult> results, DbObjectFilter filter, Run run, bool isIgnoredEmpty, string ignoredCount)
     {
+        results = results.OrderBy(r => r.schema).ThenBy(r => r.Name).ToList();
         StringBuilder html = new();
         var result = results[0];
         string returnPage = Path.Combine("..", "index.html");
