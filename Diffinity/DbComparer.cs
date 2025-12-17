@@ -172,7 +172,7 @@ public class DbComparer : DbObjectHandler
         string ignoredCount = ignoredObjects.Count.ToString();
 
         // Step 3 - Retrieve procedure names from the source server
-        List<(string schema, string name)> procedures = ProcedureFetcher.GetProcedureNames(sourceServer.connectionString);
+        List<(string schema, string name)> procedures = ProcedureFetcher.GetProcedureNames(sourceServer.connectionString).OrderBy(p => p.schema).ThenBy(p => p.name).ToList();
 
         List<dbObjectResult> results = new();
 
@@ -307,7 +307,7 @@ public class DbComparer : DbObjectHandler
         string ignoredCount = ignoredObjects.Count.ToString();
 
         // Step 3 - Retrieve view names from the source server
-        List<(string schema, string name)> views = ViewFetcher.GetViewsNames(sourceServer.connectionString).ToList();
+        List<(string schema, string name)> views = ViewFetcher.GetViewsNames(sourceServer.connectionString).OrderBy(v => v.schema).ThenBy(v => v.name).ToList();
 
         List<dbObjectResult> results = new();
 
@@ -440,7 +440,7 @@ public class DbComparer : DbObjectHandler
         string ignoredCount = ignoredObjects.Count().ToString();
 
         // Step 3 - Retrieve table names from the source server
-        List<(string schema, string name)> tables = TableFetcher.GetTablesNames(sourceServer.connectionString).ToList();
+        List<(string schema, string name)> tables = TableFetcher.GetTablesNames(sourceServer.connectionString).OrderBy(t => t.schema).ThenBy(t => t.name).ToList();
 
         List<dbObjectResult> results = new();
 
@@ -650,7 +650,7 @@ public class DbComparer : DbObjectHandler
         string ignoredCount = ignoredObjects.Count.ToString();
 
         // 3) Pull UDT names from source
-        var udts = UdtFetcher.GetUdtNames(sourceServer.connectionString); // List<(string schema, string name)>
+        var udts = UdtFetcher.GetUdtNames(sourceServer.connectionString).OrderBy(u => u.schema).ThenBy(u => u.name).ToList();
         var results = new List<dbObjectResult>();
 
         Serilog.Log.Information("UDTs:");

@@ -68,7 +68,7 @@ public static class HtmlReportWriter
         }
         
         table.conn th {
-            background-color: #f5f5f5; 
+            background-color: #dedede; 
             color: black;   
             text-align: left;
             font-weight: 600;
@@ -89,7 +89,7 @@ public static class HtmlReportWriter
         }
 
         table.summary th {
-            background-color: #f5f5f5; 
+            background-color: #dedede; 
             color: black;
             padding: 14px;
             text-align: right;
@@ -193,7 +193,9 @@ public static class HtmlReportWriter
             text-align: left;
         }
         th {
-            background-color: #f5f5f5;
+            background-color: #dedede;
+            font-weight: 600;
+            font-size: 1rem;
         }
         .match {
             color: green;
@@ -387,7 +389,9 @@ public static class HtmlReportWriter
             text-align: left;
         }
         th {
-            background-color: #f5f5f5;
+            background-color: #dedede;
+            font-weight: 600;
+            font-size: 1rem;
         }
         .match {
             color: green;
@@ -528,7 +532,7 @@ public static class HtmlReportWriter
             color: #36454F;
             font-weight: 600;
             text-transform: uppercase;
-            font-size: 0.9rem;
+            font-size: 1rem;
         }
         
         tr:nth-child(even) {background - color: #f9f9f9;
@@ -795,8 +799,8 @@ public static class HtmlReportWriter
 </table>";
 
         StringBuilder html = new StringBuilder();
-        DateTime date = DateTime.UtcNow; 
-        string Date = date.ToString("MM/dd/yyyy hh:mm tt ") + "UTC";
+        DateTime date = DateTime.Now;
+        string Date = date.ToString("MM/dd/yyyy hh:mm tt");
         TimeSpan ts = TimeSpan.FromMilliseconds(Duration);
         string formattedDuration = ts.TotalMinutes >= 1 ? $"{ts.TotalMinutes:F1} minutes" : $"{ts.TotalSeconds:F0} seconds";
 
@@ -962,6 +966,7 @@ public static class HtmlReportWriter
     /// </summary>
     public static (string html, string countObjects) WriteSummaryReport(DbServer sourceServer, DbServer destinationServer, string summaryPath, List<dbObjectResult> results, DbObjectFilter filter, Run run, bool isIgnoredEmpty, string ignoredCount)
     {
+        results = results.OrderBy(r => r.schema).ThenBy(r => r.Name).ToList();
         StringBuilder html = new();
         var result = results[0];
         string returnPage = Path.Combine("..", "index.html");
@@ -1299,7 +1304,6 @@ public static class HtmlReportWriter
           <tr>
             <th></th>
             <th>Name</th>
-            <th></th>
             <th><label class='hdr'><input type='checkbox' id='chk-tnt-src'><span>" + sourceServer.name + @" Original</span></label></th>
             <th><label class='hdr'><input type='checkbox' id='chk-tnt-dst'><span>" + destinationServer.name + @" Original</span></label></th>
             <th class='done-col'></th>
@@ -1651,7 +1655,7 @@ public static class HtmlReportWriter
             <button class='copy-btn' onclick='copyTableScript(""sourceScript"")'>{CopyIcon}{CheckIcon}</button>
             <div class='code-scroll' id='left'>
                 <table>
-                    <tr><th style='width:50px;'></th><th>Column Name</th><th>Column Type</th><th>Is Nullable</th><th>Max Length</th><th>Is Primary Key</th><th>Is Foreign Key</th></tr>");
+                    <tr><th style='width:10px; padding:0;'></th><th>Column Name</th><th>Column Type</th><th>Is Nullable</th><th>Max Length</th><th>Is Primary Key</th><th>Is Foreign Key</th></tr>");
 
         var destTableHtml = new StringBuilder();
         destTableHtml.AppendLine($@"
@@ -1660,7 +1664,7 @@ public static class HtmlReportWriter
         <button class='copy-btn' onclick='copyTableScript(""destScript"")'>{CopyIcon}{CheckIcon}</button>
         <div class='code-scroll' id='right'>
             <table>
-                <tr><th style='width:50px;'></th><th>Column Name</th><th>Column Type</th><th>Is Nullable</th><th>Max Length</th><th>Is Primary Key</th><th>Is Foreign Key</th></tr>");
+                <tr><th style='width:10px; padding:0;'></th><th>Column Name</th><th>Column Type</th><th>Is Nullable</th><th>Max Length</th><th>Is Primary Key</th><th>Is Foreign Key</th></tr>");
 
         // Track remaining columns that are not yet output
         var sourceRemaining = new Queue<tableDto>(sourceTable);
@@ -1711,6 +1715,10 @@ public static class HtmlReportWriter
                 string pkCss = destCol != null && srcCol.isPrimaryKey != destCol.isPrimaryKey ? "difference" : "";
                 string fkCss = destCol != null && srcCol.isForeignKey != destCol.isForeignKey ? "difference" : "";
 
+                string nullableDisplay = srcCol.isNullable?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true ? "YES" : "";
+                string pkDisplay = srcCol.isPrimaryKey?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true ? "YES" : "";
+                string fkDisplay = srcCol.isForeignKey?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true ? "YES" : "";
+
                 // Generate script to make DESTINATION match SOURCE
                 string colAlter;
                 if (destCol != null)
@@ -1733,13 +1741,13 @@ ALTER TABLE [{schema}].[{table}] ADD [{srcCol.columnName}] {srcCol.columnType}{l
 
                 html.AppendLine($@"
         <tr>
-            <td style='text-align:center; width:50px;'>{copyBtn}</td>
+            <td style='text-align:center; width:10px;padding:0;'>{copyBtn}</td>
             <td class='{nameCss}'>{srcCol.columnName}</td>
             <td class='{typeCss}'>{srcCol.columnType}</td>
-            <td class='{nullCss}'>{srcCol.isNullable}</td>
+            <td class='{nullCss}'>{nullableDisplay}</td>
             <td class='{lenCss}'>{srcCol.maxLength}</td>
-            <td class='{pkCss}'>{srcCol.isPrimaryKey}</td>
-            <td class='{fkCss}'>{srcCol.isForeignKey}</td>
+            <td class='{pkCss}'>{pkDisplay}</td>
+            <td class='{fkCss}'>{fkDisplay}</td>
         </tr>");
             }
             else
@@ -1785,6 +1793,10 @@ ALTER TABLE [{schema}].[{table}] ADD [{srcCol.columnName}] {srcCol.columnType}{l
                 string pkCss = srcCol != null && destCol.isPrimaryKey != srcCol.isPrimaryKey ? "difference" : "";
                 string fkCss = srcCol != null && destCol.isForeignKey != srcCol.isForeignKey ? "difference" : "";
 
+                string nullableDisplay = destCol.isNullable?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true ? "YES" : "";
+                string pkDisplay = destCol.isPrimaryKey?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true ? "YES" : "";
+                string fkDisplay = destCol.isForeignKey?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true ? "YES" : "";
+
                 // Generate script to make SOURCE match DESTINATION
                 string colAlter;
                 if (srcCol != null)
@@ -1807,13 +1819,13 @@ ALTER TABLE [{schema}].[{table}] ADD [{destCol.columnName}] {destCol.columnType}
 
                 destTableHtml.AppendLine($@"
         <tr>
-            <td style='text-align:center; width:50px;'>{copyBtn}</td>
+            <td style='text-align:center; width:10px;padding:0; '>{copyBtn}</td>
             <td class='{nameCss}'>{destCol.columnName}</td>
             <td class='{typeCss}'>{destCol.columnType}</td>
-            <td class='{nullCss}'>{destCol.isNullable}</td>
+            <td class='{nullCss}'>{nullableDisplay}</td>
             <td class='{lenCss}'>{destCol.maxLength}</td>
-            <td class='{pkCss}'>{destCol.isPrimaryKey}</td>
-            <td class='{fkCss}'>{destCol.isForeignKey}</td>
+            <td class='{pkCss}'>{pkDisplay}</td>
+            <td class='{fkCss}'>{fkDisplay}</td>
         </tr>");
             }
             else
@@ -2496,25 +2508,30 @@ ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
             {
                 ColumnType = $@" <td class=""red"">{column.columnType}</td>";
             }
-            string isNullable = $"<td>{column.isNullable}</td>";
+            string nullableDisplay = column.isNullable?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true ? "YES" : "";
+
+            string isNullable = $"<td>{nullableDisplay}</td>";
             if (differences.Contains(column.isNullable))
             {
-                isNullable = $@"<td class=""red"">{column.isNullable}</td>";
+                isNullable = $@"<td class=""red"">{nullableDisplay}</td>";
             }
             string maxLength = $"<td>{column.maxLength}</td>";
             if (differences.Contains(column.maxLength))
             {
                 maxLength = $@"<td class=""red"">{column.maxLength}</td>";
             }
-            string isPrimaryKey = $"<td>{column.isPrimaryKey}</td>";
+            string pkDisplay = column.isPrimaryKey?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true ? "YES" : "";
+            string fkDisplay = column.isForeignKey?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true ? "YES" : "";
+
+            string isPrimaryKey = $"<td>{pkDisplay}</td>";
             if (differences.Contains(column.isPrimaryKey))
             {
-                isPrimaryKey = $@"<td class=""red"">{column.isPrimaryKey}</td>";
+                isPrimaryKey = $@"<td class=""red"">{pkDisplay}</td>";
             }
-            string isForeignKey = $"<td>{column.isForeignKey}</td>";
+            string isForeignKey = $"<td>{fkDisplay}</td>";
             if (differences.Contains(column.isForeignKey))
             {
-                isForeignKey = $@"<td class=""red"">{column.isForeignKey}</td>";
+                isForeignKey = $@"<td class=""red"">{fkDisplay}</td>";
             }
             sb.AppendLine($@"<tr>
             {ColumnName}
