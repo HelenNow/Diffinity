@@ -1300,7 +1300,6 @@ public static class HtmlReportWriter
           <tr>
             <th></th>
             <th>Name</th>
-            <th></th>
             <th><label class='hdr'><input type='checkbox' id='chk-tnt-src'><span>" + sourceServer.name + @" Original</span></label></th>
             <th><label class='hdr'><input type='checkbox' id='chk-tnt-dst'><span>" + destinationServer.name + @" Original</span></label></th>
             <th class='done-col'></th>
