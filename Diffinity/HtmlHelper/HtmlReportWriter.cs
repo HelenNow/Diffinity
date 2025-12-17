@@ -44,46 +44,12 @@ public static class HtmlReportWriter
             margin-bottom: 10px;
             margin-top: 0;
         }
-        ul {
-            list-style-type: none;
-            padding: 0;
-        }
-        li {
-            margin: 20px 0;
-            font-size: 1.2em;
-        }
-        a {
-            color: #36454F;
-            text-decoration: none;
-            font-weight: 600;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
-      .btn {
-            display: block;
-            width: 220px;
-            margin: 0 auto;
-            padding: 12px 0;
-            background-color: #36454F;
-            color: white;
-            font-weight: 600;
+        h5{
+            color: #2C3539;
             text-align: center;
-            text-decoration: none;
-            border-radius: 6px;
-            box-shadow: 0 3px 8px rgba(236, 49, 127, 0.25);
-            transition: background-color 0.3s ease;
-            font-size: 1rem;
-        }
-        .btn:hover {
-            background-color: #778899;
-        }
-       h5{
-        color: #2C3539;
-        text-align: center;
-        margin-bottom:10px;
-        font-weight: normal;
-        margin-top: 0;
+            margin-bottom:10px;
+            font-weight: normal;
+            margin-top: 0;
         }
 
         table.conn {
@@ -98,20 +64,84 @@ public static class HtmlReportWriter
             border-bottom: 1px solid #ddd;
             padding: 12px 14px;
             text-align: left;
-        }
 
+        }
         
         table.conn th {
             background-color: #f5f5f5; 
             color: black;   
             text-align: left;
+            font-weight: 600;
+            font-size: 1rem;
+
         }
 
         
         table.conn td {
             color: #333;               
         }
-        .legend { text-align:center; color:#666; margin:14px 0 18px 0; }
+
+        table.summary {
+            width: 90%;
+            margin: 30px auto;
+            border-collapse: collapse;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        table.summary th {
+            background-color: #f5f5f5; 
+            color: black;
+            padding: 14px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        table.summary td {
+            padding: 12px 14px;
+            text-align: right;
+            border-bottom: 1px solid #ddd;
+        }
+        table.summary td#left {
+            text-align: left;
+        }
+
+        table.summary tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        table.summary a {
+            color: #36454F;
+            text-decoration: none;
+            font-weight: 600;
+            padding: 4px 8px;
+            display: inline-block;
+        }
+
+        table.summary a:hover {
+            text-decoration: underline;
+            color: #778899;
+        }
+
+        .btn {
+            display: block;
+            width: 220px;
+            margin: 20px auto;
+            padding: 12px 0;
+            background-color: #36454F;
+            color: white;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 6px;
+            box-shadow: 0 3px 8px rgba(236, 49, 127, 0.25);
+            transition: background-color 0.3s ease;
+            font-size: 1rem;
+        }
+
+        .btn:hover {
+            background-color: #778899;
+        }
 
         .logo {
             display: block;
@@ -128,14 +158,8 @@ public static class HtmlReportWriter
     <h5>{Date}</h5>
     <h5>{Duration}</h5>
     {connectionsTable}
-    <div class=""legend"">{countsLegend}</div>
-    <ul>
-        <li>{udtsIndex}</li>
-        <li>{tablesIndex}</li>
-        <li>{viewsIndex}</li>
-        <li>{procsIndex}</li>
-        <li>{ignoredIndex}</li>
-    </ul>
+    {summaryTable}
+    {ignoredIndex}
 </body>
 </html>
 ";
@@ -460,13 +484,13 @@ public static class HtmlReportWriter
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 40px auto;
-            max-width: 900px;
+            width: 90%;
             background-color: #fff;
             color: #222;
             padding: 20px 40px;
             border-radius: 10px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.07);
-        }
+}
         h1 {
             color: #36454F;
             text-align: center;
@@ -741,7 +765,6 @@ public static class HtmlReportWriter
             }
         }
 
-
         // Extract server and database names from connection strings
         var sourceBuilder = new SqlConnectionStringBuilder(source.connectionString);
         var destinationBuilder = new SqlConnectionStringBuilder(destination.connectionString);
@@ -751,9 +774,6 @@ public static class HtmlReportWriter
 
         string sourceDatabase = sourceBuilder.InitialCatalog;
         string destinationDatabase = destinationBuilder.InitialCatalog;
-
-
-
 
         string connectionsTable = $@"
 <table class=""conn"">
@@ -774,53 +794,159 @@ public static class HtmlReportWriter
   </tr>
 </table>";
 
-
         StringBuilder html = new StringBuilder();
-        DateTime date = DateTime.UtcNow; ;
+        DateTime date = DateTime.UtcNow; 
         string Date = date.ToString("MM/dd/yyyy hh:mm tt ") + "UTC";
         TimeSpan ts = TimeSpan.FromMilliseconds(Duration);
         string formattedDuration = ts.TotalMinutes >= 1 ? $"{ts.TotalMinutes:F1} minutes" : $"{ts.TotalSeconds:F0} seconds";
 
-        static bool Show(string? path, int count) =>
-            !string.IsNullOrWhiteSpace(path) && (count > 0);
+        (int newCount, int unchangedCount, int changedCount, int tenantCount) ParseCounts(string countText)
+        {
+            if (string.IsNullOrWhiteSpace(countText)) return (0, 0, 0, 0);
+            countText = countText.Trim('(', ')');
+            var parts = countText.Split('/');
+            if (parts.Length == 4)
+            {
+                return (
+                    int.TryParse(parts[0], out int n) ? n : 0,
+                    int.TryParse(parts[1], out int u) ? u : 0,
+                    int.TryParse(parts[2], out int c) ? c : 0,
+                    int.TryParse(parts[3], out int t) ? t : 0
+                );
+            }
+            else if (parts.Length == 3)
+            {
+                return (
+                    int.TryParse(parts[0], out int n) ? n : 0,
+                    0,
+                    int.TryParse(parts[1], out int c) ? c : 0,
+                    int.TryParse(parts[2], out int t) ? t : 0
+                );
+            }
 
-        string udtsIndex = Show(udtIndexPath, udtCount.Value)
-            ? $@"<a href=""{udtIndexPath}"" class=""btn"">Udts {udtsCountText}</a>" : "";
+            return (0, 0, 0, 0);
+        }
 
-        string tablesIndex = Show(tableIndexPath, tableCount.Value)
-            ? $@"<a href=""{tableIndexPath}"" class=""btn"">Tables {tablesCountText}</a>" : "";
+        StringBuilder summaryTable = new StringBuilder();
+        summaryTable.AppendLine(@"<table class=""summary"">");
+        summaryTable.AppendLine(@"<caption style=""font-size: 1.2rem; font-weight: 600; color: #36454F; padding: 10px; text-align: center;"">Change Log</caption>");
+        bool legendHasUnchanged = new[] { procsCountText, viewsCountText, tablesCountText, udtsCountText }
+            .Any(t => !string.IsNullOrWhiteSpace(t) && t.Count(ch => ch == '/') == 3);
 
-        string viewsIndex = Show(viewIndexPath, viewCount.Value)
-            ? $@"<a href=""{viewIndexPath}""  class=""btn"">Views {viewsCountText}</a>" : "";
+        summaryTable.AppendLine(legendHasUnchanged
+            ? @"
+    <tr>
+        <th></th>
+        <th>New</th>
+        <th>Unchanged</th>
+        <th>Changed</th>
+        <th>Tenant-specific</th>
+    </tr>"
+            : @"
+    <tr>
+        <th></th>
+        <th>New</th>
+        <th>Changed</th>
+        <th>Tenant-specific</th>
+    </tr>");
 
-        string procsIndex = Show(procIndexPath, procCount.Value)
-            ? $@"<a href=""{procIndexPath}""  class=""btn"">Procedures {procsCountText}</a>" : "";
+        if (udtCount > 0 && !string.IsNullOrWhiteSpace(udtIndexPath))
+        {
+            var (newC, unchangedC, changedC, tenantC) = ParseCounts(udtsCountText);
+            summaryTable.AppendLine(legendHasUnchanged
+                ? $@"
+    <tr>
+        <td id=""left""><a href=""{udtIndexPath}"">UDTs</a></td>
+        <td>{(newC > 0 ? $@"<a href=""{udtIndexPath}#new"">{newC}</a>" : "")}</td>
+        <td>{(unchangedC > 0 ? $@"<a href=""{udtIndexPath}#unchanged"">{unchangedC}</a>" : "")}</td>
+        <td>{(changedC > 0 ? $@"<a href=""{udtIndexPath}#changed"">{changedC}</a>" : "")}</td>
+        <td>{(tenantC > 0 ? $@"<a href=""{udtIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
+    </tr>"
+                : $@"
+    <tr>
+        <td id=""left""><a href=""{udtIndexPath}"">UDTs</a></td>
+        <td>{(newC > 0 ? $@"<a href=""{udtIndexPath}#new"">{newC}</a>" : "")}</td>
+        <td>{(changedC > 0 ? $@"<a href=""{udtIndexPath}#changed"">{changedC}</a>" : "")}</td>
+        <td>{(tenantC > 0 ? $@"<a href=""{udtIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
+    </tr>");
+        }
 
+        if (tableCount > 0 && !string.IsNullOrWhiteSpace(tableIndexPath))
+        {
+            var (newC, unchangedC, changedC, tenantC) = ParseCounts(tablesCountText);
+            summaryTable.AppendLine(legendHasUnchanged
+                ? $@"
+    <tr>
+        <td id=""left""><a href=""{tableIndexPath}"">Tables</a></td>
+        <td>{(newC > 0 ? $@"<a href=""{tableIndexPath}#new"">{newC}</a>" : "")}</td>
+        <td>{(unchangedC > 0 ? $@"<a href=""{tableIndexPath}#unchanged"">{unchangedC}</a>" : "")}</td>
+        <td>{(changedC > 0 ? $@"<a href=""{tableIndexPath}#changed"">{changedC}</a>" : "")}</td>
+        <td>{(tenantC > 0 ? $@"<a href=""{tableIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
+    </tr>"
+                : $@"
+    <tr>
+        <td id=""left""><a href=""{tableIndexPath}"">Tables</a></td>
+        <td>{(newC > 0 ? $@"<a href=""{tableIndexPath}#new"">{newC}</a>" : "")}</td>
+        <td>{(changedC > 0 ? $@"<a href=""{tableIndexPath}#changed"">{changedC}</a>" : "")}</td>
+        <td>{(tenantC > 0 ? $@"<a href=""{tableIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
+    </tr>");
+        }
+
+        if (viewCount > 0 && !string.IsNullOrWhiteSpace(viewIndexPath))
+        {
+            var (newC, unchangedC, changedC, tenantC) = ParseCounts(viewsCountText);
+            summaryTable.AppendLine(legendHasUnchanged
+                ? $@"
+    <tr>
+        <td id=""left""><a href=""{viewIndexPath}"">Views</a></td>
+        <td>{(newC > 0 ? $@"<a href=""{viewIndexPath}#new"">{newC}</a>" : "")}</td>
+        <td>{(unchangedC > 0 ? $@"<a href=""{viewIndexPath}#unchanged"">{unchangedC}</a>" : "")}</td>
+        <td>{(changedC > 0 ? $@"<a href=""{viewIndexPath}#changed"">{changedC}</a>" : "")}</td>
+        <td>{(tenantC > 0 ? $@"<a href=""{viewIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
+    </tr>"
+                : $@"
+    <tr>
+        <td id=""left""><a href=""{viewIndexPath}"">Views</a></td>
+        <td>{(newC > 0 ? $@"<a href=""{viewIndexPath}#new"">{newC}</a>" : "")}</td>
+        <td>{(changedC > 0 ? $@"<a href=""{viewIndexPath}#changed"">{changedC}</a>" : "")}</td>
+        <td>{(tenantC > 0 ? $@"<a href=""{viewIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
+    </tr>");
+        }
+
+        if (procCount > 0 && !string.IsNullOrWhiteSpace(procIndexPath))
+        {
+            var (newC, unchangedC, changedC, tenantC) = ParseCounts(procsCountText);
+            summaryTable.AppendLine(legendHasUnchanged
+                ? $@"
+    <tr>
+        <td id=""left""><a href=""{procIndexPath}"">Procedures</a></td>
+        <td>{(newC > 0 ? $@"<a href=""{procIndexPath}#new"">{newC}</a>" : "")}</td>
+        <td>{(unchangedC > 0 ? $@"<a href=""{procIndexPath}#unchanged"">{unchangedC}</a>" : "")}</td>
+        <td>{(changedC > 0 ? $@"<a href=""{procIndexPath}#changed"">{changedC}</a>" : "")}</td>
+        <td>{(tenantC > 0 ? $@"<a href=""{procIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
+    </tr>"
+                : $@"
+    <tr>
+        <td id=""left""><a href=""{procIndexPath}"">Procedures</a></td>
+        <td>{(newC > 0 ? $@"<a href=""{procIndexPath}#new"">{newC}</a>" : "")}</td>
+        <td>{(changedC > 0 ? $@"<a href=""{procIndexPath}#changed"">{changedC}</a>" : "")}</td>
+        <td>{(tenantC > 0 ? $@"<a href=""{procIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
+    </tr>");
+        }
+
+        summaryTable.AppendLine("</table>");
 
         string ignoredIndex = string.IsNullOrWhiteSpace(ignoredIndexPath)
             ? ""
             : $@"<a href=""{ignoredIndexPath}"" class=""btn"">Ignored</a>";
 
-        bool legendHasUnchanged =
-            new[] { procsCountText, viewsCountText, tablesCountText, udtsCountText }
-            .Any(t => !string.IsNullOrWhiteSpace(t) && t.Count(ch => ch == '/') == 3);
-
-        string countsLegend = legendHasUnchanged
-            ? "new/unchanged/changed/tenant"
-            : "new/changed/tenant";
-
-        // Replace placeholders in the index template
         html.Append(
             IndexTemplate
               .Replace("{connectionsTable}", connectionsTable)
-              .Replace("{procsIndex}", procsIndex)
-              .Replace("{viewsIndex}", viewsIndex)
-              .Replace("{tablesIndex}", tablesIndex)
-              .Replace("{udtsIndex}", udtsIndex)
+              .Replace("{summaryTable}", summaryTable.ToString())
               .Replace("{ignoredIndex}", ignoredIndex)
               .Replace("{Date}", Date)
               .Replace("{Duration}", formattedDuration)
-              .Replace("{countsLegend}", countsLegend)
         );
         string indexPath = Path.Combine(outputPath, "index.html");
 
@@ -874,7 +1000,7 @@ public static class HtmlReportWriter
         if (newObjects.Any())
         {
             StringBuilder newTable = new StringBuilder();
-            newTable.AppendLine($@"<h2 style=""color: #2C3539;"">New {result.Type}s in {sourceServer.name} ({newObjectsCount}) : </h2>
+            newTable.AppendLine($@"<h2 id=""new"" style=""color: #2C3539;"">New {result.Type}s in {sourceServer.name} ({newObjectsCount}) : </h2>
             <table>
                 <tr>
                     <th></th>
@@ -944,8 +1070,8 @@ public static class HtmlReportWriter
         if (unchangedObjects.Any())
         {
             StringBuilder unchangedTable = new StringBuilder();
-            unchangedTable.AppendLine($@"<h2 style=""color: #2C3539;"">Unchanged {result.Type}s ({equalCount}) : </h2>
-            <table>
+            unchangedTable.AppendLine($@"<h2 id=""unchanged"" style=""color: #2C3539;"">Unchanged {result.Type}s ({equalCount}) : </h2>
+                <table>
                 <tr>
                     <th></th>
                     <th>{result.Type} Name</th>
@@ -1019,7 +1145,7 @@ public static class HtmlReportWriter
            : string.Empty;
         html.Replace("{copySection}", copySection);
         int Number = 1;
-        html.AppendLine($@"<h2 style = ""color: #2C3539;"">Changed {result.Type}s ({notEqualCount}) :</h2>");
+        html.AppendLine($@"<h2 id=""changed"" style = ""color: #2C3539;"">Changed {result.Type}s ({notEqualCount}) :</h2>");
         foreach (var item in changedObjects)
         {
             // For tables: generate ALTER scripts for comparison
@@ -1167,7 +1293,7 @@ public static class HtmlReportWriter
 
         if (tenantSpecific.Any())
         {
-            html.AppendLine($@"<br><h2 style=""color: #2C3539;"">Tenant Specific {result.Type}s ({tenantCount}) :</h2>");
+            html.AppendLine($@"<br><h2 id=""tenant"" style=""color: #2C3539;"">Tenant Specific {result.Type}s ({tenantCount}) :</h2>"); 
             html.AppendLine(@"
         <table>
           <tr>
