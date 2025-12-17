@@ -42,6 +42,7 @@ public static class HtmlReportWriter
             color: #36454F;
             text-align: center;
             margin-bottom: 10px;
+            margin-top: 0;
         }
         ul {
             list-style-type: none;
@@ -77,17 +78,19 @@ public static class HtmlReportWriter
         .btn:hover {
             background-color: #778899;
         }
-        h3{
+       h5{
         color: #2C3539;
         text-align: center;
-        margin-bottom:40px;
+        margin-bottom:10px;
         font-weight: normal;
+        margin-top: 0;
         }
 
         table.conn {
             width: 90%;
             margin: 0 auto 24px auto;
             border-collapse: collapse;
+            margin: 20px auto 24px auto;
         }
 
         table.conn th,
@@ -114,6 +117,7 @@ public static class HtmlReportWriter
             display: block;
             margin: 0 auto 20px auto;
             width: 100px;    
+            margin: 0 auto 10px auto;
         }
 
     </style>
@@ -121,8 +125,8 @@ public static class HtmlReportWriter
 <body>
     <img src=""images/diffinitylogo.png"" class=""logo"" alt=""Diffinity Logo"" />
     <h1>Diffinity Report</h1>
-    <h3>{Date}</h3>
-    <h3>{Duration}</h3>
+    <h5>{Date}</h5>
+    <h5>{Duration}</h5>
     {connectionsTable}
     <div class=""legend"">{countsLegend}</div>
     <ul>
