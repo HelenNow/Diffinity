@@ -2285,6 +2285,10 @@ ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
         var columnFKs = currentFKs?.Where(fk => fk.ColumnName.Equals(currentCol.columnName, StringComparison.OrdinalIgnoreCase)).ToList();
         bool hasFKConstraint = columnFKs != null && columnFKs.Any();
 
+        // Check if this column has any FK constraints in TARGET
+        var targetColumnFKs = targetFKs?.Where(fk => fk.ColumnName.Equals(currentCol.columnName, StringComparison.OrdinalIgnoreCase)).ToList();
+        bool targetHasFKConstraint = targetColumnFKs != null && targetColumnFKs.Any();
+
         if (!existsInTarget)
         {
             // Column exists in current but not in target: DROP COLUMN
@@ -2311,7 +2315,10 @@ ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
                 !string.Equals(currentCol.isNullable, targetCol.isNullable, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(currentCol.maxLength, targetCol.maxLength, StringComparison.OrdinalIgnoreCase);
 
-            if (isModified)
+            // Check if FK status changed
+            bool fkStatusChanged = !string.Equals(currentCol.isForeignKey, targetCol.isForeignKey, StringComparison.OrdinalIgnoreCase);
+
+            if (isModified || fkStatusChanged)
             {
                 // Drop FK constraints before altering the column
                 if (hasFKConstraint)
@@ -2324,19 +2331,20 @@ ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
                     }
                 }
 
-                // ALTER COLUMN to match target
-                var len = NormalizeLen(targetCol.columnType, targetCol.maxLength);
-                var nullability = (targetCol.isNullable?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true) ? "NULL" : "NOT NULL";
-                sb.AppendLine($"-- Alter column [{currentCol.columnName}] in [{schema}].[{table}]");
-                sb.AppendLine($"ALTER TABLE [{schema}].[{table}] ALTER COLUMN [{targetCol.columnName}] {targetCol.columnType}{len} {nullability};");
-
-                // Re-add FK constraints if they should exist in target
-                var targetColumnFKs = targetFKs?.Where(fk => fk.ColumnName.Equals(targetCol.columnName, StringComparison.OrdinalIgnoreCase))
-                    .GroupBy(fk => fk.ConstraintName);
-
-                if (targetColumnFKs != null && targetColumnFKs.Any())
+                // Only ALTER COLUMN if data type, nullability, or length changed
+                if (isModified)
                 {
-                    foreach (var fkGroup in targetColumnFKs)
+                    var len = NormalizeLen(targetCol.columnType, targetCol.maxLength);
+                    var nullability = (targetCol.isNullable?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true) ? "NULL" : "NOT NULL";
+                    sb.AppendLine($"-- Alter column [{currentCol.columnName}] in [{schema}].[{table}]");
+                    sb.AppendLine($"ALTER TABLE [{schema}].[{table}] ALTER COLUMN [{targetCol.columnName}] {targetCol.columnType}{len} {nullability};");
+                }
+
+                if (targetHasFKConstraint)
+                {
+                    var targetFKGroups = targetColumnFKs.GroupBy(fk => fk.ConstraintName);
+
+                    foreach (var fkGroup in targetFKGroups)
                     {
                         var fkList = fkGroup.ToList();
                         var fkColumns = string.Join(", ", fkList.Select(fk => $"[{fk.ColumnName}]"));
@@ -2344,7 +2352,7 @@ ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
                         var refSchema = fkList.First().ReferencedSchema;
                         var refTable = fkList.First().ReferencedTable;
 
-                        sb.AppendLine($"-- Re-add FK constraint after altering column");
+                        sb.AppendLine($"-- Add FK constraint");
                         sb.AppendLine($"ALTER TABLE [{schema}].[{table}] ADD CONSTRAINT [{fkGroup.Key}] FOREIGN KEY ({fkColumns}) REFERENCES [{refSchema}].[{refTable}]({refColumns});");
                     }
                 }
@@ -2362,12 +2370,11 @@ ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
             sb.AppendLine($"ALTER TABLE [{schema}].[{table}] ADD [{currentCol.columnName}] {currentCol.columnType}{len} {nullability};");
 
             // Add FK constraints if they should exist
-            var targetColumnFKs = targetFKs?.Where(fk => fk.ColumnName.Equals(currentCol.columnName, StringComparison.OrdinalIgnoreCase))
-                .GroupBy(fk => fk.ConstraintName);
-
-            if (targetColumnFKs != null && targetColumnFKs.Any())
+            if (targetHasFKConstraint)
             {
-                foreach (var fkGroup in targetColumnFKs)
+                var targetFKGroups = targetColumnFKs.GroupBy(fk => fk.ConstraintName);
+
+                foreach (var fkGroup in targetFKGroups)
                 {
                     var fkList = fkGroup.ToList();
                     var fkColumns = string.Join(", ", fkList.Select(fk => $"[{fk.ColumnName}]"));
