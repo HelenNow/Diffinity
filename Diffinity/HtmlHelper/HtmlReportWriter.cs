@@ -1005,12 +1005,16 @@ public static class HtmlReportWriter
         if (newObjects.Any())
         {
             StringBuilder newTable = new StringBuilder();
-            newTable.AppendLine($@"<h2 id=""new"" style=""color: #2C3539;"">New {result.Type}s in {sourceServer.name} ({newObjectsCount}) : </h2>
-            <table>
+            newTable.AppendLine($@"
+                <div class=""copy-Section"" style=""display:flex;justify-content:flex-end;margin:10px 0 6px 0;"">
+                    <button id=""copyNew"" class=""copy-selected"">Copy Selected</button>
+                </div>
+                <h2 id=""new"" style=""color: #2C3539;"">New {result.Type}s in {sourceServer.name} ({newObjectsCount}) : </h2>
+                <table>
                 <tr>
                     <th></th>
                     <th>{result.Type} Name</th>
-                    <th></th>
+                    <th><label class=""hdr""><input type=""checkbox"" id=""chk-new-all""><span>Select All</span></label></th>
                     <th></th>
                     <th class=""done-col""></th>
                 </tr>");
@@ -1023,16 +1027,17 @@ public static class HtmlReportWriter
                     ? CreateTableScript(item.schema, item.Name, item.SourceTableInfo, item.SourceForeignKeys)
                     : item.SourceBody;
 
-                string sourceLink = $@"<a href=""{item.SourceFile}"">View</a";
+                string sourceLink = $@"<a href=""{item.SourceFile}"">View</a>";
+                string checkboxCell = $@"<label class='pick'><input type='checkbox' class='sel-new'></label>";
                 string copyButton = $@"<button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button><br>
-                <span class=""copy-target"" style=""display:none;"">{copyPayload}</span>";
+                <span class=""copy-target copy-new"" style=""display:none;"">{copyPayload}</span>";
                 string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyPane(this)"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
                 newTable.Append($@"<tr data-key=""new|{result.Type}|{item.schema}.{item.Name}"">
                         <td>{newCount}</td>
-                        <td> {item.schema}.{item.Name}{copyNameButton}</td>
-                                <td>{sourceLink}</td>
-                                <td>{copyButton}</td>
-                                <td class=""done-col"">
+                        <td>{item.schema}.{item.Name}{copyNameButton}</td>
+                        <td>{checkboxCell} {sourceLink}</td>
+                        <td>{copyButton}</td>
+                        <td class=""done-col"">
                                     <input type=""checkbox""
                                            class=""mark-done""
                                            onchange=""toggleRow(this)""
@@ -1058,6 +1063,45 @@ public static class HtmlReportWriter
                             alert('Failed to copy!');
                         });
                      }
+
+                const newAll = document.getElementById('chk-new-all');
+                if (newAll) {
+                    newAll.addEventListener('change', () => {
+                        document.querySelectorAll('.sel-new').forEach(cb => cb.checked = newAll.checked);
+                    });
+                }
+
+                const btnNew = document.getElementById('copyNew');
+                if (btnNew) {
+                    btnNew.addEventListener('click', () => {
+                        const rows = Array.from(document.querySelectorAll('table tr')).slice(1);
+                        const parts = [];
+        
+                        rows.forEach(tr => {
+                            const newCb = tr.querySelector('.sel-new');
+                            if (newCb && newCb.checked) {
+                                const span = tr.querySelector('.copy-new');
+                                const txt = (span && span.textContent ? span.textContent : '').trim();
+                                if (txt) parts.push(txt);
+                            }
+                        });
+        
+                        const blob = parts.length ? parts.join('\nGO\n\n') + '\nGO' : '';
+                        if (!blob) {
+                            alert('No items selected.');
+                            return;
+                        }
+        
+                        navigator.clipboard.writeText(blob).then(() => {
+                            const old = btnNew.textContent;
+                            btnNew.textContent = 'Copied!';
+                            setTimeout(() => btnNew.textContent = old, 1200);
+                        }).catch(err => {
+                            console.error('Copy failed:', err);
+                            alert('Failed to copy!');
+                        });
+                    });
+                }
                 </script>"
             );
             html.Replace("{NewTable}", newTable.ToString());
@@ -2285,6 +2329,10 @@ ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
         var columnFKs = currentFKs?.Where(fk => fk.ColumnName.Equals(currentCol.columnName, StringComparison.OrdinalIgnoreCase)).ToList();
         bool hasFKConstraint = columnFKs != null && columnFKs.Any();
 
+        // Check if this column has any FK constraints in TARGET
+        var targetColumnFKs = targetFKs?.Where(fk => fk.ColumnName.Equals(currentCol.columnName, StringComparison.OrdinalIgnoreCase)).ToList();
+        bool targetHasFKConstraint = targetColumnFKs != null && targetColumnFKs.Any();
+
         if (!existsInTarget)
         {
             // Column exists in current but not in target: DROP COLUMN
@@ -2311,7 +2359,10 @@ ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
                 !string.Equals(currentCol.isNullable, targetCol.isNullable, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(currentCol.maxLength, targetCol.maxLength, StringComparison.OrdinalIgnoreCase);
 
-            if (isModified)
+            // Check if FK status changed
+            bool fkStatusChanged = !string.Equals(currentCol.isForeignKey, targetCol.isForeignKey, StringComparison.OrdinalIgnoreCase);
+
+            if (isModified || fkStatusChanged)
             {
                 // Drop FK constraints before altering the column
                 if (hasFKConstraint)
@@ -2324,19 +2375,20 @@ ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
                     }
                 }
 
-                // ALTER COLUMN to match target
-                var len = NormalizeLen(targetCol.columnType, targetCol.maxLength);
-                var nullability = (targetCol.isNullable?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true) ? "NULL" : "NOT NULL";
-                sb.AppendLine($"-- Alter column [{currentCol.columnName}] in [{schema}].[{table}]");
-                sb.AppendLine($"ALTER TABLE [{schema}].[{table}] ALTER COLUMN [{targetCol.columnName}] {targetCol.columnType}{len} {nullability};");
-
-                // Re-add FK constraints if they should exist in target
-                var targetColumnFKs = targetFKs?.Where(fk => fk.ColumnName.Equals(targetCol.columnName, StringComparison.OrdinalIgnoreCase))
-                    .GroupBy(fk => fk.ConstraintName);
-
-                if (targetColumnFKs != null && targetColumnFKs.Any())
+                // Only ALTER COLUMN if data type, nullability, or length changed
+                if (isModified)
                 {
-                    foreach (var fkGroup in targetColumnFKs)
+                    var len = NormalizeLen(targetCol.columnType, targetCol.maxLength);
+                    var nullability = (targetCol.isNullable?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true) ? "NULL" : "NOT NULL";
+                    sb.AppendLine($"-- Alter column [{currentCol.columnName}] in [{schema}].[{table}]");
+                    sb.AppendLine($"ALTER TABLE [{schema}].[{table}] ALTER COLUMN [{targetCol.columnName}] {targetCol.columnType}{len} {nullability};");
+                }
+
+                if (targetHasFKConstraint)
+                {
+                    var targetFKGroups = targetColumnFKs.GroupBy(fk => fk.ConstraintName);
+
+                    foreach (var fkGroup in targetFKGroups)
                     {
                         var fkList = fkGroup.ToList();
                         var fkColumns = string.Join(", ", fkList.Select(fk => $"[{fk.ColumnName}]"));
@@ -2344,7 +2396,7 @@ ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
                         var refSchema = fkList.First().ReferencedSchema;
                         var refTable = fkList.First().ReferencedTable;
 
-                        sb.AppendLine($"-- Re-add FK constraint after altering column");
+                        sb.AppendLine($"-- Add FK constraint");
                         sb.AppendLine($"ALTER TABLE [{schema}].[{table}] ADD CONSTRAINT [{fkGroup.Key}] FOREIGN KEY ({fkColumns}) REFERENCES [{refSchema}].[{refTable}]({refColumns});");
                     }
                 }
@@ -2362,12 +2414,11 @@ ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
             sb.AppendLine($"ALTER TABLE [{schema}].[{table}] ADD [{currentCol.columnName}] {currentCol.columnType}{len} {nullability};");
 
             // Add FK constraints if they should exist
-            var targetColumnFKs = targetFKs?.Where(fk => fk.ColumnName.Equals(currentCol.columnName, StringComparison.OrdinalIgnoreCase))
-                .GroupBy(fk => fk.ConstraintName);
-
-            if (targetColumnFKs != null && targetColumnFKs.Any())
+            if (targetHasFKConstraint)
             {
-                foreach (var fkGroup in targetColumnFKs)
+                var targetFKGroups = targetColumnFKs.GroupBy(fk => fk.ConstraintName);
+
+                foreach (var fkGroup in targetFKGroups)
                 {
                     var fkList = fkGroup.ToList();
                     var fkColumns = string.Join(", ", fkList.Select(fk => $"[{fk.ColumnName}]"));
