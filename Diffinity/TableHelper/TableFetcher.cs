@@ -13,20 +13,21 @@ public class TableFetcher
             ORDER BY s.name, t.name;
         ";
     private const string GetTableInfoQuery = @"
-    SELECT 
-        c.name AS columnName,
-        ty.name AS columnType,
-        CASE WHEN c.is_nullable = 1 THEN 'YES' ELSE 'NO' END AS isNullable,
-        CASE 
-            WHEN ty.name IN ('varchar','nvarchar','char','nchar') THEN c.max_length
-            ELSE NULL
-        END AS maxLength,
-        CASE 
-            WHEN pk.column_id IS NOT NULL THEN 'YES' ELSE 'NO' 
-        END AS isPrimaryKey,
-        CASE 
-            WHEN fk.parent_column_id IS NOT NULL THEN 'YES' ELSE 'NO' 
-        END AS isForeignKey
+SELECT 
+    c.name AS columnName,
+    ty.name AS columnType,
+    CASE WHEN c.is_nullable = 1 THEN 'YES' ELSE 'NO' END AS isNullable,
+    CASE 
+        WHEN ty.name IN ('nvarchar', 'nchar') THEN c.max_length / 2
+        WHEN ty.name IN ('varchar', 'char') THEN c.max_length
+        ELSE NULL
+    END AS maxLength,
+    CASE 
+        WHEN pk.column_id IS NOT NULL THEN 'YES' ELSE 'NO' 
+    END AS isPrimaryKey,
+    CASE 
+        WHEN fk.parent_column_id IS NOT NULL THEN 'YES' ELSE 'NO' 
+    END AS isForeignKey
     FROM sys.columns c
     JOIN sys.tables t ON c.object_id = t.object_id
     JOIN sys.schemas s ON t.schema_id = s.schema_id

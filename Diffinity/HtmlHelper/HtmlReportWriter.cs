@@ -1954,21 +1954,15 @@ ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
         if (string.IsNullOrWhiteSpace(lenStr)) return "";
         if (!int.TryParse(lenStr, out var len)) return "";
 
-        // nvarchar/nchar length in sys.columns is bytes. Convert to characters.
-        if (type.Equals("nvarchar", StringComparison.OrdinalIgnoreCase) ||
-            type.Equals("nchar", StringComparison.OrdinalIgnoreCase))
-        {
-            if (len == -1) return "(MAX)";
-            return $"({len / 2})";
-        }
+        if (len == -1) return "(MAX)";
 
-        // varchar/char/binary/varbinary length is bytes already.
-        if (type.Equals("varchar", StringComparison.OrdinalIgnoreCase) ||
+        if (type.Equals("nvarchar", StringComparison.OrdinalIgnoreCase) ||
+            type.Equals("nchar", StringComparison.OrdinalIgnoreCase) ||
+            type.Equals("varchar", StringComparison.OrdinalIgnoreCase) ||
             type.Equals("char", StringComparison.OrdinalIgnoreCase) ||
             type.Equals("varbinary", StringComparison.OrdinalIgnoreCase) ||
             type.Equals("binary", StringComparison.OrdinalIgnoreCase))
         {
-            if (len == -1) return "(MAX)";
             return $"({len})";
         }
 
