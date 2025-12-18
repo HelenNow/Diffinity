@@ -239,7 +239,7 @@ public class DbComparer : DbObjectHandler
                 if (!isDestinationEmpty && !areEqual)
                 {
                     string differencesPath = Path.Combine(schemaFolder, differencesFile);
-                    HtmlReportWriter.DifferencesWriter(differencesPath, sourceServer.name, destinationServer.name, sourceBody, destinationBody, "Differences", proc, returnPage);
+                    HtmlReportWriter.DifferencesWriter(differencesPath, sourceServer.name, destinationServer.name, sourceBody, destinationBody, "Differences", $"{schema}.{proc}", returnPage);
                     isDifferencesVisible = true;
                 }
                 isVisible = true;
@@ -372,8 +372,7 @@ public class DbComparer : DbObjectHandler
                 if (!isDestinationEmpty && !areEqual)
                 {
                     string differencesPath = Path.Combine(schemaFolder, differencesFile);
-                    HtmlReportWriter.DifferencesWriter(differencesPath, sourceServer.name, destinationServer.name, sourceBody, destinationBody, "Differences", view, returnPage);
-                    isDifferencesVisible = true;
+                    HtmlReportWriter.DifferencesWriter(differencesPath, sourceServer.name, destinationServer.name, sourceBody, destinationBody, "Differences", $"{schema}.{view}", returnPage); isDifferencesVisible = true;
                 }
                 isVisible = true;
             }
@@ -711,7 +710,7 @@ public class DbComparer : DbObjectHandler
                         Path.Combine(schemaFolder, differencesFile),
                         sourceServer.name, destinationServer.name,
                         sourceBody, destBody,
-                        "Differences", name, returnPage);
+                        "Differences", $"{schema}.{name}", returnPage);
                     isDifferencesVisible = true;
                 }
                 isVisible = true;
