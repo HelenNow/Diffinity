@@ -188,7 +188,7 @@ public static class HtmlReportWriter
             border-collapse: collapse;
         }
         th, td {
-            padding: 12px 16px;
+            padding: 6px 2px;
             border-bottom: 1px solid #ddd;
             text-align: left;
         }
@@ -746,7 +746,36 @@ public static class HtmlReportWriter
         .deleted { background-color: #f6c6c6; }
         .imaginary { background-color: #eee; color: #999; }
         .modified { background-color: #fff3b0; }
-        </style>
+        .copy-btn-small.copied .icon-copy {
+        display: none;
+    }
+    .name-copy-btn {
+        margin: 0 0 0 8px;
+        background-color: transparent;
+        color: #888; 
+        border: none;
+        font-size: 13px; 
+        padding: 2px 4px; 
+        border-radius: 3px;
+        cursor: pointer;
+        vertical-align: middle;
+        display: inline-flex;
+        align-items: center;
+    }
+    .name-copy-btn:hover {
+        background-color: #f0f0f0; 
+        color: #666; 
+    }
+    .name-copy-btn .icon-check {
+        display: none;
+    }
+    .name-copy-btn.copied .icon-check {
+        display: inline-block;
+    }
+    .name-copy-btn.copied .icon-copy {
+        display: none;
+    }
+    </style>
         </head>
         <body>";
 
@@ -1577,8 +1606,8 @@ public static class HtmlReportWriter
         html.AppendLine(DifferencesTemplate.Replace("{title}", title));
 
         // Source block
-        html.AppendLine(@$"<h1>{Name}</h1>
-                        <div class='diff-wrapper'>
+        html.AppendLine(@$"<h1>{Name}<button class=""name-copy-btn"" onclick=""copyName(this)"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{Name}</span></h1>
+                         <div class='diff-wrapper'>
                         <div class='pane'>
                         <button class='copy-btn' data-target='left'>{CopyIcon}{CheckIcon}</button>   
                         <h2>{sourceName}</h2>
@@ -1612,6 +1641,19 @@ public static class HtmlReportWriter
                  <a href=""{returnPage}"" class=""return-btn"">Return to Summary</a>
               
                 <script>
+                function copyName(button) {{
+                    const container = button.closest('h1');
+                    const codeBlock = container.querySelector('.copy-target');
+                    const text = codeBlock?.innerText.trim();
+
+                    navigator.clipboard.writeText(text).then(() => {{
+                        button.classList.add('copied'); 
+                        setTimeout(() => button.classList.remove('copied'), 2000); 
+                    }}).catch(err => {{
+                        console.error('Copy failed:', err);
+                        alert('Failed to copy!');
+                    }});
+                }}
                 document.querySelectorAll('.copy-btn').forEach(button => {{
                     button.addEventListener('click', () => {{
                         const targetId = button.getAttribute('data-target');
@@ -1692,8 +1734,8 @@ public static class HtmlReportWriter
 
         html.AppendLine($@"
     <body>
-    <h1>{title} for {objectName}</h1>
-    <div class='side-by-side'>
+    <h1>{title} for {objectName}<button class=""name-copy-btn"" onclick=""copyName(this)"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{objectName}</span></h1>
+        <div class='side-by-side'>
         <div class='db-block'>
             <span class='use'>{sourceName}</span>
             <button class='copy-btn' onclick='copyTableScript(""sourceScript"")'>{CopyIcon}{CheckIcon}</button>
@@ -1931,9 +1973,42 @@ ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
     .copy-btn-small.copied .icon-copy {{
         display: none;
     }}
-    </style>
-    
+.name-copy-btn {{margin: 0 0 0 8px;
+        background-color: transparent;
+        color: #888; 
+        border: none;
+        font-size: 13px; 
+        padding: 2px 4px; 
+        border-radius: 3px;
+        cursor: pointer;
+        vertical-align: middle;
+        display: inline-flex;
+        align-items: center;
+    }}
+    .name-copy-btn:hover {{background - color: #f0f0f0; 
+        color: #666; 
+    }}
+    .name-copy-btn .icon-check {{display: none;
+    }}
+    .name-copy-btn.copied .icon-check {{display: inline-block;
+    }}
+    .name-copy-btn.copied .icon-copy {{display: none;
+    }}
+    </style>    
     <script>
+    function copyName(button) {{
+        const container = button.closest('h1');
+        const codeBlock = container.querySelector('.copy-target');
+        const text = codeBlock?.innerText.trim();
+
+        navigator.clipboard.writeText(text).then(() => {{
+            button.classList.add('copied'); 
+            setTimeout(() => button.classList.remove('copied'), 2000); 
+        }}).catch(err => {{
+            console.error('Copy failed:', err);
+            alert('Failed to copy!');
+        }});
+    }}
     // Copy full table script (header buttons)
     function copyTableScript(scriptId) {{
         const scriptElement = document.getElementById(scriptId);
