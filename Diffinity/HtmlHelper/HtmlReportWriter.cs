@@ -339,6 +339,61 @@ public static class HtmlReportWriter
           /* keep checkbox column neat */
           .done-col { text-align:center; width:80px; }
           .done-col input { vertical-align:middle; }
+          .tag {
+            display: inline-block;
+            background-color: #e3f2fd;
+            color: #1976d2;
+            padding: 1px 4px;
+            margin: 1px 2px;
+            border-radius: 8px;
+            font-size: 0.65rem;
+            font-weight: 500;
+            white-space: nowrap;
+          }
+        table {
+            table-layout: fixed;
+            width: 100%;
+        }
+
+        table th:first-child,
+        table td:first-child {
+            width: 40px;
+            text-align: center;
+        }
+
+        table th:nth-child(2),
+        table td:nth-child(2) {
+            width: 35%;
+            word-wrap: break-word;
+        }
+
+        table th:nth-child(3),
+        table td:nth-child(3) {
+            width: 15%;
+        }
+
+        table th:nth-child(4),
+        table td:nth-child(4) {
+            width: 15%;
+        }
+
+        table th:nth-child(5),
+        table td:nth-child(5) {
+            width: 15%;
+        }
+
+        table th:last-child,
+        table td:last-child {
+            width: 80px;
+            text-align: center;
+        }
+
+        .tag-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            margin-top: 2px;
+        }
     </style>
 </head>
 <body>
@@ -1061,9 +1116,13 @@ public static class HtmlReportWriter
                 string copyButton = $@"<button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button><br>
                 <span class=""copy-target copy-new"" style=""display:none;"">{copyPayload}</span>";
                 string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyPane(this)"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
+                string tagsHtml = item.Tags.Any()? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag => $@"<span class=""tag"">{tag}</span>"))}</div>": "";
                 newTable.Append($@"<tr data-key=""new|{result.Type}|{item.schema}.{item.Name}"">
                         <td>{newCount}</td>
-                        <td>{item.schema}.{item.Name}{copyNameButton}</td>
+                        <td>
+                            <div>{item.schema}.{item.Name}{copyNameButton}</div>
+                            {tagsHtml}
+                        </td>
                         <td>{checkboxCell} {sourceLink}</td>
                         <td>{copyButton}</td>
                         <td class=""done-col"">
@@ -1169,10 +1228,14 @@ public static class HtmlReportWriter
                 string sourceLink = $@"<a href=""{item.SourceFile}"">View</a";
                 string copyButton = $@"<button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button><br>
                 <span class=""copy-target"" style=""display:none;"">{copyPayload}</span>";
+                string tagsHtml = item.Tags.Any() ? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag => $@"<span class=""tag"">{tag}</span>"))}</div>" : "";
 
                 unchangedTable.Append($@"<tr data-key=""Unchanged|{result.Type}|{item.schema}.{item.Name}"">
                                 <td>{newCount}</td>
-                                <td>{item.schema}.{item.Name}{copyNameButton}</td>
+                                <td>
+                                    <div>{item.schema}.{item.Name}{copyNameButton}</div>
+                                    {tagsHtml}
+                                </td>
                                 <td>{sourceLink}</td>
                                 <td>{copyButton}</td>
                                 <td class=""done-col"">
@@ -1231,6 +1294,7 @@ public static class HtmlReportWriter
             string sourceCopy = item.SourceBody;
             string destCopy = item.DestinationBody;
             string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyPane(this)"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
+            string tagsHtml = item.Tags.Any() ? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag => $@"<span class=""tag"">{tag}</span>"))}</div>" : "";
             if (item.Type == "Table")
             {
                 // Source copy button gets script to alter the SOURCE table (make it match destination)
@@ -1257,7 +1321,10 @@ public static class HtmlReportWriter
 
             html.Append($@"<tr data-key=""changed|{result.Type}|{item.schema}.{item.Name}"">
                 <td>{Number}</td>
-                <td >{item.schema}.{item.Name}{copyNameButton}</td>
+                <td>
+                    <div>{item.schema}.{item.Name}{copyNameButton}</div>
+                    {tagsHtml}
+                </td>
                 <td>{sourceColumn}</td>
                 <td>{destinationColumn}</td>
                 <td>{differencesColumn}</td>
@@ -1400,6 +1467,8 @@ public static class HtmlReportWriter
               <button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button>
               <span class=""copy-target copy-src"" style=""display:none;"">{sourceCopy}</span>" : "—";
 
+                string tagsHtml = item.Tags.Any() ? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag => $@"<span class=""tag"">{tag}</span>"))}</div>" : "";
+
                 string destinationColumn = !string.IsNullOrWhiteSpace(item.DestinationFile) ? $@"<label class='pick'>
               <input type='checkbox' class='tnt-dst'><a href=""{item.DestinationFile}"">View</a></label>
               <button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button>
@@ -1408,7 +1477,10 @@ public static class HtmlReportWriter
                 html.Append($@"
           <tr data-key=""tenant|{item.Type}|{item.schema}.{item.Name}"">
             <td>{tsNum}</td>
-            <td>{item.schema}.{item.Name}{copyNameButton}</td>
+            <td>
+                <div>{item.schema}.{item.Name}{copyNameButton}</div>
+                {tagsHtml}
+            </td>
             <td>{sourceColumn}</td>
             <td>{destinationColumn}</td>
             <td class=""done-col"">
