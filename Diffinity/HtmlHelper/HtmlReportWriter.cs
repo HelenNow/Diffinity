@@ -64,7 +64,7 @@ public static class HtmlReportWriter
             border-bottom: 1px solid #ddd;
             padding: 12px 14px;
             text-align: left;
-
+            white-space: nowrap;
         }
         
         table.conn th {
@@ -101,6 +101,7 @@ public static class HtmlReportWriter
             padding: 12px 14px;
             text-align: right;
             border-bottom: 1px solid #ddd;
+            white-space: nowrap;
         }
         table.summary td#left {
             text-align: left;
@@ -172,7 +173,7 @@ public static class HtmlReportWriter
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 1000px;
+            max-width: 90%;
             margin: 40px auto;
             padding: 20px;
             background-color: #fff;
@@ -191,6 +192,9 @@ public static class HtmlReportWriter
             padding: 6px 2px;
             border-bottom: 1px solid #ddd;
             text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         th {
             background-color: #dedede;
@@ -351,7 +355,7 @@ public static class HtmlReportWriter
             white-space: nowrap;
           }
         table {
-            table-layout: fixed;
+            table-layout: auto;
             width: 100%;
         }
 
@@ -359,12 +363,6 @@ public static class HtmlReportWriter
         table td:first-child {
             width: 40px;
             text-align: center;
-        }
-
-        table th:nth-child(2),
-        table td:nth-child(2) {
-            width: 35%;
-            word-wrap: break-word;
         }
 
         table th:nth-child(3),
@@ -442,6 +440,7 @@ public static class HtmlReportWriter
             padding: 12px 16px;
             border-bottom: 1px solid #ddd;
             text-align: left;
+            white-space: nowrap;
         }
         th {
             background-color: #dedede;
@@ -581,6 +580,7 @@ public static class HtmlReportWriter
         th, td {padding: 12px 16px;
             text-align: left;
             border-bottom: 1px solid #eee;
+            white-space: nowrap;
         }
         
         th {background - color: #36454F;
