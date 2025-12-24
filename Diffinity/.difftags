@@ -1,0 +1,8 @@
+core.vwDataReport, sally
+[core].[vwDataReportPivoted2_UTC], sally
+[core].[vwDataReportPivoted2], sally
+[core].[vwHelenDashboard_Sally], sally
+[core].[vwHelenDashboard_Sally], sally
+[powerbi].[vwLinenEmployeeDashboard_sally], sally
+[powerbi].[vwConciergeAnalytics_sally], sally
+[ai].[spInsertDailySummary2], podcasts
