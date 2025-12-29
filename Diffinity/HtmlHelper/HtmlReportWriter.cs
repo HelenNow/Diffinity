@@ -64,7 +64,7 @@ public static class HtmlReportWriter
             border-bottom: 1px solid #ddd;
             padding: 12px 14px;
             text-align: left;
-
+            white-space: nowrap;
         }
         
         table.conn th {
@@ -101,6 +101,7 @@ public static class HtmlReportWriter
             padding: 12px 14px;
             text-align: right;
             border-bottom: 1px solid #ddd;
+            white-space: nowrap;
         }
         table.summary td#left {
             text-align: left;
@@ -172,7 +173,7 @@ public static class HtmlReportWriter
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 1000px;
+            max-width: 90%;
             margin: 40px auto;
             padding: 20px;
             background-color: #fff;
@@ -191,6 +192,9 @@ public static class HtmlReportWriter
             padding: 6px 2px;
             border-bottom: 1px solid #ddd;
             text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         th {
             background-color: #dedede;
@@ -351,7 +355,7 @@ public static class HtmlReportWriter
             white-space: nowrap;
           }
         table {
-            table-layout: fixed;
+            table-layout: auto;
             width: 100%;
         }
 
@@ -359,12 +363,6 @@ public static class HtmlReportWriter
         table td:first-child {
             width: 40px;
             text-align: center;
-        }
-
-        table th:nth-child(2),
-        table td:nth-child(2) {
-            width: 35%;
-            word-wrap: break-word;
         }
 
         table th:nth-child(3),
@@ -442,6 +440,7 @@ public static class HtmlReportWriter
             padding: 12px 16px;
             border-bottom: 1px solid #ddd;
             text-align: left;
+            white-space: nowrap;
         }
         th {
             background-color: #dedede;
@@ -581,6 +580,7 @@ public static class HtmlReportWriter
         th, td {padding: 12px 16px;
             text-align: left;
             border-bottom: 1px solid #eee;
+            white-space: nowrap;
         }
         
         th {background - color: #36454F;
@@ -1048,7 +1048,7 @@ public static class HtmlReportWriter
     /// <summary>
     /// Writes a detailed summary report comparing objects (procedures, views, tables) between source and destination.
     /// </summary>
-    public static (string html, string countObjects) WriteSummaryReport(DbServer sourceServer, DbServer destinationServer, string summaryPath, List<dbObjectResult> results, DbObjectFilter filter, Run run, bool isIgnoredEmpty, string ignoredCount)
+    public static (string html, string countObjects) WriteSummaryReport(DbServer sourceServer, DbServer destinationServer, string summaryPath, List<dbObjectResult> results, DbObjectFilter filter, Run run, bool isIgnoredEmpty, string ignoredCount, Dictionary<string, string> tagColors)
     {
         results = results.OrderBy(r => r.schema).ThenBy(r => r.Name).ToList();
         StringBuilder html = new();
@@ -1116,7 +1116,14 @@ public static class HtmlReportWriter
                 string copyButton = $@"<button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button><br>
                 <span class=""copy-target copy-new"" style=""display:none;"">{copyPayload}</span>";
                 string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyPane(this)"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
-                string tagsHtml = item.Tags.Any()? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag => $@"<span class=""tag"">{tag}</span>"))}</div>": "";
+                string tagsHtml = item.Tags.Any()
+                    ? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag =>
+                    {
+                        string bgColor = tagColors.ContainsKey(tag) ? tagColors[tag] : "#e3f2fd";
+                        string textColor = GetTextColor(bgColor);
+                        return $@"<span class=""tag"" style=""background-color: {bgColor}; color: {textColor};"">{tag}</span>";
+                    }))}</div>"
+                    : "";
                 newTable.Append($@"<tr data-key=""new|{result.Type}|{item.schema}.{item.Name}"">
                         <td>{newCount}</td>
                         <td>
@@ -1228,8 +1235,14 @@ public static class HtmlReportWriter
                 string sourceLink = $@"<a href=""{item.SourceFile}"">View</a";
                 string copyButton = $@"<button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button><br>
                 <span class=""copy-target"" style=""display:none;"">{copyPayload}</span>";
-                string tagsHtml = item.Tags.Any() ? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag => $@"<span class=""tag"">{tag}</span>"))}</div>" : "";
-
+                string tagsHtml = item.Tags.Any()
+                    ? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag =>
+                    {
+                        string bgColor = tagColors.ContainsKey(tag) ? tagColors[tag] : "#e3f2fd";
+                        string textColor = GetTextColor(bgColor);
+                        return $@"<span class=""tag"" style=""background-color: {bgColor}; color: {textColor};"">{tag}</span>";
+                    }))}</div>"
+                    : "";
                 unchangedTable.Append($@"<tr data-key=""Unchanged|{result.Type}|{item.schema}.{item.Name}"">
                                 <td>{newCount}</td>
                                 <td>
@@ -1294,7 +1307,14 @@ public static class HtmlReportWriter
             string sourceCopy = item.SourceBody;
             string destCopy = item.DestinationBody;
             string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyPane(this)"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
-            string tagsHtml = item.Tags.Any() ? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag => $@"<span class=""tag"">{tag}</span>"))}</div>" : "";
+            string tagsHtml = item.Tags.Any()
+                ? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag =>
+                {
+                    string bgColor = tagColors.ContainsKey(tag) ? tagColors[tag] : "#e3f2fd";
+                    string textColor = GetTextColor(bgColor);
+                    return $@"<span class=""tag"" style=""background-color: {bgColor}; color: {textColor};"">{tag}</span>";
+                }))}</div>"
+                : "";
             if (item.Type == "Table")
             {
                 // Source copy button gets script to alter the SOURCE table (make it match destination)
@@ -1467,8 +1487,14 @@ public static class HtmlReportWriter
               <button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button>
               <span class=""copy-target copy-src"" style=""display:none;"">{sourceCopy}</span>" : "—";
 
-                string tagsHtml = item.Tags.Any() ? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag => $@"<span class=""tag"">{tag}</span>"))}</div>" : "";
-
+                string tagsHtml = item.Tags.Any()
+                    ? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag =>
+                    {
+                        string bgColor = tagColors.ContainsKey(tag) ? tagColors[tag] : "#e3f2fd";
+                        string textColor = GetTextColor(bgColor);
+                        return $@"<span class=""tag"" style=""background-color: {bgColor}; color: {textColor};"">{tag}</span>";
+                    }))}</div>"
+                    : "";
                 string destinationColumn = !string.IsNullOrWhiteSpace(item.DestinationFile) ? $@"<label class='pick'>
               <input type='checkbox' class='tnt-dst'><a href=""{item.DestinationFile}"">View</a></label>
               <button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button>
@@ -2738,6 +2764,44 @@ ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
         sb.AppendLine("</table>");
         return sb.ToString();
 
+    }
+    private static string GetTextColor(string backgroundColor)
+    {
+        if (string.IsNullOrWhiteSpace(backgroundColor))
+            return "#000000";
+
+        var cssColorMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        {"red", "FF0000"}, {"blue", "0000FF"}, {"green", "008000"},
+        {"yellow", "FFFF00"}, {"orange", "FFA500"}, {"purple", "800080"},
+        {"pink", "FFC0CB"}, {"black", "000000"}, {"white", "FFFFFF"},
+        {"gray", "808080"}, {"grey", "808080"}, {"brown", "A52A2A"}
+    };
+
+        backgroundColor = backgroundColor.TrimStart('#');
+
+        if (cssColorMap.ContainsKey(backgroundColor))
+        {
+            backgroundColor = cssColorMap[backgroundColor];
+        }
+
+        if (backgroundColor.Length != 6)
+            return "#000000";
+
+        try
+        {
+            int r = Convert.ToInt32(backgroundColor.Substring(0, 2), 16);
+            int g = Convert.ToInt32(backgroundColor.Substring(2, 2), 16);
+            int b = Convert.ToInt32(backgroundColor.Substring(4, 2), 16);
+
+            double luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+            return luminance > 0.5 ? "#000000" : "#ffffff";
+        }
+        catch
+        {
+            return "#000000";
+        }
     }
     #endregion
 
