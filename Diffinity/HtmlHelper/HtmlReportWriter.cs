@@ -1903,21 +1903,8 @@ public static class HtmlReportWriter
                 string pkDisplay = srcCol.isPrimaryKey?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true ? "YES" : "";
                 string fkDisplay = srcCol.isForeignKey?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true ? "YES" : "";
 
-                // Generate script to make DESTINATION match SOURCE
-                string colAlter;
-                if (destCol != null)
-                {
-                    // Both exist: Alter Dest to match Source
-                    colAlter = GenerateColumnAlterScript(schema, table, destCol, srcCol, destinationTable, sourceTable, destFKs, sourceFKs);
-                }
-                else
-                {
-                    // Missing in Dest: Add to Dest
-                    var len = NormalizeLen(srcCol.columnType, srcCol.maxLength);
-                    var nullability = (srcCol.isNullable?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true) ? "NULL" : "NOT NULL";
-                    colAlter = $@"-- Add column to [{schema}].[{table}]
-ALTER TABLE [{schema}].[{table}] ADD [{srcCol.columnName}] {srcCol.columnType}{len} {nullability};";
-                }
+                // Generate script with BOTH options
+                string colAlter = GenerateColumnAlterScript(schema, table, srcCol, destCol, sourceTable, destinationTable, sourceFKs, destFKs);
 
                 string copyBtn = string.IsNullOrWhiteSpace(colAlter) ? "" :
                     $@"<button class='copy-btn-small' onclick='copyColumnScript(""src-col-{rowNum}"")'>{CopyIcon}{CheckIcon}</button>
@@ -1936,25 +1923,31 @@ ALTER TABLE [{schema}].[{table}] ADD [{srcCol.columnName}] {srcCol.columnType}{l
             }
             else
             {
-
                 if (destCol != null)
                 {
-                    var sbDrop = new StringBuilder();
+                    var sbBoth = new StringBuilder();
+
+                    sbBoth.AppendLine($"-- Add column to source [{schema}].[{table}]");
+                    var len = NormalizeLen(destCol.columnType, destCol.maxLength);
+                    var nullability = (destCol.isNullable?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true) ? "NULL" : "NOT NULL";
+                    sbBoth.AppendLine($"ALTER TABLE [{schema}].[{table}] ADD [{destCol.columnName}] {destCol.columnType}{len} {nullability};");
+                    sbBoth.AppendLine();
+                    sbBoth.AppendLine($"-- Drop column from destination [{schema}].[{table}]");
+
                     var colFKs = destFKs?.Where(fk => fk.ColumnName.Equals(destCol.columnName, StringComparison.OrdinalIgnoreCase)).ToList();
                     if (colFKs != null && colFKs.Any())
                     {
                         var constraintNames = colFKs.Select(fk => fk.ConstraintName).Distinct();
                         foreach (var cName in constraintNames)
                         {
-                            sbDrop.AppendLine($"ALTER TABLE [{schema}].[{table}] DROP CONSTRAINT [{cName}];");
+                            sbBoth.AppendLine($"ALTER TABLE [{schema}].[{table}] DROP CONSTRAINT [{cName}];");
                         }
                     }
 
-                    sbDrop.AppendLine($"-- Drop column from [{schema}].[{table}]");
-                    sbDrop.AppendLine($"ALTER TABLE [{schema}].[{table}] DROP COLUMN [{destCol.columnName}];");
+                    sbBoth.AppendLine($"ALTER TABLE [{schema}].[{table}] DROP COLUMN [{destCol.columnName}];");
 
                     string copyBtn = $@"<button class='copy-btn-small' onclick='copyColumnScript(""src-col-{rowNum}"")'>{CopyIcon}{CheckIcon}</button>
-        <span id='src-col-{rowNum}' style='display:none;'>{sbDrop}</span>";
+<span id='src-col-{rowNum}' style='display:none;'>{sbBoth}</span>";
 
                     html.AppendLine($@"<tr><td style='text-align:center; width:50px;'>{copyBtn}</td><td colspan='6' class='missing'>&nbsp;</td></tr>");
                 }
@@ -1981,21 +1974,8 @@ ALTER TABLE [{schema}].[{table}] ADD [{srcCol.columnName}] {srcCol.columnType}{l
                 string pkDisplay = destCol.isPrimaryKey?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true ? "YES" : "";
                 string fkDisplay = destCol.isForeignKey?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true ? "YES" : "";
 
-                // Generate script to make SOURCE match DESTINATION
-                string colAlter;
-                if (srcCol != null)
-                {
-                    // Both exist: Alter Source to match Dest
-                    colAlter = GenerateColumnAlterScript(schema, table, srcCol, destCol, sourceTable, destinationTable, sourceFKs, destFKs);
-                }
-                else
-                {
-                    // Missing in Source: Add to Source
-                    var len = NormalizeLen(destCol.columnType, destCol.maxLength);
-                    var nullability = (destCol.isNullable?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true) ? "NULL" : "NOT NULL";
-                    colAlter = $@"-- Add column to [{schema}].[{table}]
-ALTER TABLE [{schema}].[{table}] ADD [{destCol.columnName}] {destCol.columnType}{len} {nullability};";
-                }
+                // Generate script with BOTH options
+                string colAlter = GenerateColumnAlterScript(schema, table, destCol, srcCol, destinationTable, sourceTable, destFKs, sourceFKs);
 
                 string copyBtn = string.IsNullOrWhiteSpace(colAlter) ? "" :
                     $@"<button class='copy-btn-small' onclick='copyColumnScript(""dst-col-{rowNum}"")'>{CopyIcon}{CheckIcon}</button>
@@ -2017,12 +1997,18 @@ ALTER TABLE [{schema}].[{table}] ADD [{destCol.columnName}] {destCol.columnType}
                 // Column missing in destination
                 if (srcCol != null)
                 {
-                    // Make Source like Dest (Dest is missing it): Drop from Source
-                    string dropColScript = $@"-- Drop column from [{schema}].[{table}]
-ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
+                    var sbBoth = new StringBuilder();
+
+                    sbBoth.AppendLine($"-- Add column to destination [{schema}].[{table}]");
+                    var len = NormalizeLen(srcCol.columnType, srcCol.maxLength);
+                    var nullability = (srcCol.isNullable?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true) ? "NULL" : "NOT NULL";
+                    sbBoth.AppendLine($"ALTER TABLE [{schema}].[{table}] ADD [{srcCol.columnName}] {srcCol.columnType}{len} {nullability};");
+                    sbBoth.AppendLine();
+                    sbBoth.AppendLine($"-- Drop column from source [{schema}].[{table}]");
+                    sbBoth.AppendLine($"ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];");
 
                     string copyBtn = $@"<button class='copy-btn-small' onclick='copyColumnScript(""dst-col-{rowNum}"")'>{CopyIcon}{CheckIcon}</button>
-                <span id='dst-col-{rowNum}' style='display:none;'>{dropColScript}</span>";
+                    <span id='dst-col-{rowNum}' style='display:none;'>{sbBoth}</span>";
 
                     destTableHtml.AppendLine($@"<tr><td style='text-align:center; width:50px;'>{copyBtn}</td><td colspan='6' class='missing'>&nbsp;</td></tr>");
                 }
@@ -2508,7 +2494,13 @@ ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
 
         if (!existsInTarget)
         {
-            // Column exists in current but not in target: DROP COLUMN
+            // Column exists in current but not in target: Show BOTH options
+            sb.AppendLine($"-- Add column to target [{schema}].[{table}]");
+            var len = NormalizeLen(currentCol.columnType, currentCol.maxLength);
+            var nullability = (currentCol.isNullable?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true) ? "NULL" : "NOT NULL";
+            sb.AppendLine($"ALTER TABLE [{schema}].[{table}] ADD [{currentCol.columnName}] {currentCol.columnType}{len} {nullability};");
+            sb.AppendLine();
+            sb.AppendLine($"-- Drop column from source [{schema}].[{table}]");
 
             // First drop any FK constraints on this column
             if (hasFKConstraint)
@@ -2520,7 +2512,6 @@ ALTER TABLE [{schema}].[{table}] DROP COLUMN [{srcCol.columnName}];";
                     sb.AppendLine($"ALTER TABLE [{schema}].[{table}] DROP CONSTRAINT [{constraintName}];");
                 }
             }
-
             sb.AppendLine($"-- Drop column from [{schema}].[{table}]");
             sb.AppendLine($"ALTER TABLE [{schema}].[{table}] DROP COLUMN [{currentCol.columnName}];");
         }
