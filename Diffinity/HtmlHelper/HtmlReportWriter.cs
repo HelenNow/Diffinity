@@ -23,6 +23,7 @@ public static class HtmlReportWriter
     private const string CheckIcon = @"<svg viewBox=""0 0 24 24"" width=""20"" height=""20"" fill=""currentColor"" aria-hidden=""true"" class=""icon-check""><path d=""M9 16.2l-3.5-3.5 1.4-1.4L9 13.4l7.1-7.1 1.4 1.4L9 16.2z""/></svg>";
     private const string SmallCopyIcon = @"<svg viewBox=""0 0 24 24"" width=""14"" height=""14"" fill=""currentColor"" aria-hidden=""true"" class=""icon-copy""><path d=""M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c-1.1-.9-2-2-2-2zm0 16H8V7h11v14z""/></svg>";
     private const string SmallCheckIcon = @"<svg viewBox=""0 0 24 24"" width=""14"" height=""14"" fill=""currentColor"" aria-hidden=""true"" class=""icon-check""><path d=""M9 16.2l-3.5-3.5 1.4-1.4L9 13.4l7.1-7.1 1.4 1.4L9 16.2z""/></svg>";
+    private const string InfoIcon = @"<svg viewBox=""0 0 24 24"" width=""16"" height=""16"" fill=""currentColor""><path d=""M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z""/></svg>";
     private const string IndexTemplate = @"
 <!DOCTYPE html>
 <html lang=""en"">
@@ -392,6 +393,62 @@ public static class HtmlReportWriter
             gap: 2px;
             margin-top: 2px;
         }
+.doc-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-left: 6px;
+    cursor: pointer;
+    position: relative;
+    vertical-align: middle;
+    opacity: 0.7;
+}
+
+.doc-icon:hover {
+    opacity: 1;
+}
+
+.doc-icon svg {
+    fill: #36454F;
+    width: 18px;
+    height: 18px;
+}
+
+.doc-tooltip {
+    display: none;
+    position: absolute;
+    left: 30px;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: #dedede;
+    color: #333;
+    padding: 10px 14px;
+    border-radius: 4px;
+    white-space: normal;
+    word-wrap: break-word;
+    width: 350px;
+    max-width: 350px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    z-index: 10000;
+    font-size: 13px;
+    font-weight: normal;
+    line-height: 1.5;
+    text-align: left;
+    border: 1px solid #bbb;
+}
+
+.doc-icon:hover .doc-tooltip {
+    display: block;
+}
+table {
+    overflow: visible !important;
+}
+
+td {
+    overflow: visible !important;
+}
     </style>
 </head>
 <body>
@@ -1112,9 +1169,12 @@ public static class HtmlReportWriter
                     : item.SourceBody;
 
                 string sourceLink = $@"<a href=""{item.SourceFile}"">View</a>";
+                string docIcon = !string.IsNullOrWhiteSpace(item.Documentation)
+                    ? $@"<span class=""doc-icon"">{InfoIcon}<span class=""doc-tooltip"">{item.Documentation}</span></span>"
+                    : "";
                 string checkboxCell = $@"<label class='pick'><input type='checkbox' class='sel-new'></label>";
                 string copyButton = $@"<button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button><br>
-                <span class=""copy-target copy-new"" style=""display:none;"">{copyPayload}</span>";
+<span class=""copy-target copy-new"" style=""display:none;"">{copyPayload}</span>";
                 string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyPane(this)"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
                 string tagsHtml = item.Tags.Any()
                     ? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag =>
@@ -1125,13 +1185,13 @@ public static class HtmlReportWriter
                     }))}</div>"
                     : "";
                 newTable.Append($@"<tr data-key=""new|{result.Type}|{item.schema}.{item.Name}"">
-                        <td>{newCount}</td>
-                        <td>
-                            <div>{item.schema}.{item.Name}{copyNameButton}</div>
-                            {tagsHtml}
-                        </td>
-                        <td>{checkboxCell} {sourceLink}</td>
-                        <td>{copyButton}</td>
+        <td>{newCount}</td>
+        <td>
+            <div>{item.schema}.{item.Name}{copyNameButton}{docIcon}</div>
+            {tagsHtml}
+        </td>
+        <td>{checkboxCell} {sourceLink}</td>
+        <td>{copyButton}</td>
                         <td class=""done-col"">
                                     <input type=""checkbox""
                                            class=""mark-done""
@@ -1228,13 +1288,16 @@ public static class HtmlReportWriter
             foreach (var item in unchangedObjects)
             {
                 string copyPayload = item.Type == "Table"
-                    ? CreateTableScript(item.schema, item.Name, item.SourceTableInfo, item.SourceForeignKeys)
-                    : item.SourceBody;
+    ? CreateTableScript(item.schema, item.Name, item.SourceTableInfo, item.SourceForeignKeys)
+    : item.SourceBody;
 
                 string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyPane(this)"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
-                string sourceLink = $@"<a href=""{item.SourceFile}"">View</a";
+                string sourceLink = $@"<a href=""{item.SourceFile}"">View</a>";
+                string docIcon = !string.IsNullOrWhiteSpace(item.Documentation)
+                    ? $@"<span class=""doc-icon"">{InfoIcon}<span class=""doc-tooltip"">{item.Documentation}</span></span>"
+                    : "";
                 string copyButton = $@"<button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button><br>
-                <span class=""copy-target"" style=""display:none;"">{copyPayload}</span>";
+<span class=""copy-target"" style=""display:none;"">{copyPayload}</span>";
                 string tagsHtml = item.Tags.Any()
                     ? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag =>
                     {
@@ -1244,13 +1307,13 @@ public static class HtmlReportWriter
                     }))}</div>"
                     : "";
                 unchangedTable.Append($@"<tr data-key=""Unchanged|{result.Type}|{item.schema}.{item.Name}"">
-                                <td>{newCount}</td>
-                                <td>
-                                    <div>{item.schema}.{item.Name}{copyNameButton}</div>
-                                    {tagsHtml}
-                                </td>
-                                <td>{sourceLink}</td>
-                                <td>{copyButton}</td>
+                <td>{newCount}</td>
+                <td>
+                    <div>{item.schema}.{item.Name}{copyNameButton}{docIcon}</div>
+                    {tagsHtml}
+                </td>
+                <td>{sourceLink}</td>
+                <td>{copyButton}</td>
                                 <td class=""done-col"">
                                     <input type=""checkbox""
                                            class=""mark-done""
@@ -1325,6 +1388,9 @@ public static class HtmlReportWriter
             }
 
             // Prepare file links
+            string docIcon = !string.IsNullOrWhiteSpace(item.Documentation)
+                ? $@"<span class=""doc-icon"">{InfoIcon}<span class=""doc-tooltip"">{item.Documentation}</span></span>"
+                : "";
             string sourceColumn = item.SourceFile != null ? $@"<label class='pick'>
     <input type='checkbox' class='sel-src'> <a href=""{item.SourceFile}"">View</a></label>
     <button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button>
@@ -1338,11 +1404,10 @@ public static class HtmlReportWriter
             string differencesColumn = item.DifferencesFile != null ? $@"<a href=""{item.DifferencesFile}"">View</a>" : "—";
             string newColumn = item.NewFile != null ? $@"<a href=""{item.NewFile}"">View</a>" : "—";
 
-
             html.Append($@"<tr data-key=""changed|{result.Type}|{item.schema}.{item.Name}"">
                 <td>{Number}</td>
                 <td>
-                    <div>{item.schema}.{item.Name}{copyNameButton}</div>
+                    <div>{item.schema}.{item.Name}{copyNameButton}{docIcon}</div>
                     {tagsHtml}
                 </td>
                 <td>{sourceColumn}</td>
@@ -1482,10 +1547,14 @@ public static class HtmlReportWriter
                     destCopy = CreateAlterTableScript(item.schema, item.Name, item.SourceTableInfo, item.DestinationTableInfo, item.SourceForeignKeys, item.DestinationForeignKeys);
                 }
 
-                string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyPane(this)"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>"; string sourceColumn = !string.IsNullOrWhiteSpace(item.SourceFile) ? $@"<label class='pick'>
-              <input type='checkbox' class='tnt-src'> <a href=""{item.SourceFile}"">View</a></label>
-              <button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button>
-              <span class=""copy-target copy-src"" style=""display:none;"">{sourceCopy}</span>" : "—";
+                string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyPane(this)"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
+                string docIcon = !string.IsNullOrWhiteSpace(item.Documentation)
+                    ? $@"<span class=""doc-icon"">{InfoIcon}<span class=""doc-tooltip"">{item.Documentation}</span></span>"
+                    : "";
+                string sourceColumn = !string.IsNullOrWhiteSpace(item.SourceFile) ? $@"<label class='pick'>
+      <input type='checkbox' class='tnt-src'> <a href=""{item.SourceFile}"">View</a></label>
+      <button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button>
+      <span class=""copy-target copy-src"" style=""display:none;"">{sourceCopy}</span>" : "—";
 
                 string tagsHtml = item.Tags.Any()
                     ? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag =>
@@ -1495,20 +1564,21 @@ public static class HtmlReportWriter
                         return $@"<span class=""tag"" style=""background-color: {bgColor}; color: {textColor};"">{tag}</span>";
                     }))}</div>"
                     : "";
+
                 string destinationColumn = !string.IsNullOrWhiteSpace(item.DestinationFile) ? $@"<label class='pick'>
-              <input type='checkbox' class='tnt-dst'><a href=""{item.DestinationFile}"">View</a></label>
-              <button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button>
-              <span class=""copy-target copy-dst"" style=""display:none;"">{destCopy}</span>" : "—";
+      <input type='checkbox' class='tnt-dst'><a href=""{item.DestinationFile}"">View</a></label> 
+      <button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button>
+      <span class=""copy-target copy-dst"" style=""display:none;"">{destCopy}</span>" : "—";
 
                 html.Append($@"
-          <tr data-key=""tenant|{item.Type}|{item.schema}.{item.Name}"">
-            <td>{tsNum}</td>
-            <td>
-                <div>{item.schema}.{item.Name}{copyNameButton}</div>
-                {tagsHtml}
-            </td>
-            <td>{sourceColumn}</td>
-            <td>{destinationColumn}</td>
+  <tr data-key=""tenant|{item.Type}|{item.schema}.{item.Name}"">
+    <td>{tsNum}</td>
+    <td>
+        <div>{item.schema}.{item.Name}{copyNameButton}{docIcon}</div>
+        {tagsHtml}
+    </td>
+    <td>{sourceColumn}</td>
+    <td>{destinationColumn}</td>
             <td class=""done-col"">
               <input type=""checkbox""
                      class=""mark-done""

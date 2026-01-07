@@ -57,6 +57,7 @@ public class DbComparer : DbObjectHandler
         var ignoredObjects = DiffIgnoreLoader.LoadIgnoredObjects();
         var objectTags = DiffTagsLoader.LoadObjectTags();
         var tagColors = DiffTagColorsLoader.LoadTagColors();
+        var objectDocs = DocfinityLoader.LoadObjectDocumentation();
         summaryReportDto ignoredReport = !ignoredObjects.Any() ? new summaryReportDto() : HtmlReportWriter.WriteIgnoredReport(outputFolder, ignoredObjects, run.Value);
         summaryReportDto ProcReport;
         summaryReportDto ViewReport;
@@ -70,7 +71,7 @@ public class DbComparer : DbObjectHandler
             case Run.Proc:
                 {
                     sw.Start();
-                    ProcReport = CompareProcs(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
+                    ProcReport = CompareProcs(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, objectDocs, threadCount);
                     File.WriteAllText(ProcReport.fullPath, ProcReport.html.Replace("{procsCount}", ProcReport.count));
                     if (ignoredObjects.Any()) File.WriteAllText(ignoredReport.fullPath, ignoredReport.html.Replace("{procsCount}", ProcReport.count));
                     sw.Stop();
@@ -79,7 +80,7 @@ public class DbComparer : DbObjectHandler
             case Run.View:
                 {
                     sw.Start();
-                    ViewReport = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
+                    ViewReport = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, objectDocs, threadCount);
                     File.WriteAllText(ViewReport.fullPath, ViewReport.html.Replace("{viewsCount}", ViewReport.count));
                     if (ignoredObjects.Any()) File.WriteAllText(ignoredReport.fullPath, ignoredReport.html.Replace("{viewsCount}", ViewReport.count));
                     sw.Stop();
@@ -88,7 +89,7 @@ public class DbComparer : DbObjectHandler
             case Run.Table:
                 {
                     sw.Start();
-                    TableReport = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
+                    TableReport = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, objectDocs, threadCount);
                     File.WriteAllText(TableReport.fullPath, TableReport.html.Replace("{tablesCount}", TableReport.count));
                     if (ignoredObjects.Any()) File.WriteAllText(ignoredReport.fullPath, ignoredReport.html.Replace("{tablesCount}", TableReport.count));
                     sw.Stop();
@@ -97,7 +98,7 @@ public class DbComparer : DbObjectHandler
             case Run.Udt:
                 {
                     sw.Start();
-                    UdtReport = CompareUdts(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
+                    UdtReport = CompareUdts(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, objectDocs, threadCount);
                     File.WriteAllText(UdtReport.fullPath, UdtReport.html.Replace("{udtsCount}", UdtReport.count));
                     if (ignoredObjects.Any()) File.WriteAllText(ignoredReport.fullPath, ignoredReport.html.Replace("{udtsCount}", UdtReport.count));
                     sw.Stop();
@@ -106,8 +107,8 @@ public class DbComparer : DbObjectHandler
             case Run.ProcView:
                 {
                     sw.Start();
-                    ProcReport = CompareProcs(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
-                    ViewReport = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
+                    ProcReport = CompareProcs(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, objectDocs, threadCount);
+                    ViewReport = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, objectDocs, threadCount);
                     File.WriteAllText(ProcReport.fullPath, ProcReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count));
                     File.WriteAllText(ViewReport.fullPath, ViewReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count));
                     if (ignoredObjects.Any()) File.WriteAllText(ignoredReport.fullPath, ignoredReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count));
@@ -117,8 +118,8 @@ public class DbComparer : DbObjectHandler
             case Run.ProcTable:
                 {
                     sw.Start();
-                    ProcReport = CompareProcs(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
-                    TableReport = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
+                    ProcReport = CompareProcs(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, objectDocs, threadCount);
+                    TableReport = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, objectDocs, threadCount);
                     File.WriteAllText(ProcReport.fullPath, ProcReport.html.Replace("{procsCount}", ProcReport.count).Replace("{tablesCount}", TableReport.count));
                     File.WriteAllText(TableReport.fullPath, TableReport.html.Replace("{procsCount}", ProcReport.count).Replace("{tablesCount}", TableReport.count));
                     if (ignoredObjects.Any()) File.WriteAllText(ignoredReport.fullPath, ignoredReport.html.Replace("{procsCount}", ProcReport.count).Replace("{tablesCount}", TableReport.count));
@@ -128,8 +129,8 @@ public class DbComparer : DbObjectHandler
             case Run.ViewTable:
                 {
                     sw.Start();
-                    ViewReport = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
-                    TableReport = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
+                    ViewReport = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, objectDocs, threadCount);
+                    TableReport = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, objectDocs, threadCount);
                     File.WriteAllText(ViewReport.fullPath, ViewReport.html.Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count));
                     File.WriteAllText(TableReport.fullPath, TableReport.html.Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count));
                     if (ignoredObjects.Any()) File.WriteAllText(ignoredReport.fullPath, ignoredReport.html.Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count));
@@ -139,10 +140,10 @@ public class DbComparer : DbObjectHandler
             case Run.All:
                 {
                     sw.Start();
-                    ProcReport = CompareProcs(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
-                    ViewReport = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
-                    TableReport = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
-                    UdtReport = CompareUdts(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
+                    ProcReport = CompareProcs(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, objectDocs, threadCount);
+                    ViewReport = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, objectDocs, threadCount);
+                    TableReport = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, objectDocs, threadCount);
+                    UdtReport = CompareUdts(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, objectDocs, threadCount);
                     File.WriteAllText(ProcReport.fullPath, ProcReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count).Replace("{udtsCount}", UdtReport.count));
                     File.WriteAllText(ViewReport.fullPath, ViewReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count).Replace("{udtsCount}", UdtReport.count));
                     File.WriteAllText(TableReport.fullPath, TableReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count).Replace("{udtsCount}", UdtReport.count));
@@ -156,7 +157,7 @@ public class DbComparer : DbObjectHandler
         }
 
     }
-    public static summaryReportDto CompareProcs(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, int threadCount)
+    public static summaryReportDto CompareProcs(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, Dictionary<string, string> objectDocs, int threadCount)
     {
         ParallelOptions parallelOptions = new() { MaxDegreeOfParallelism = threadCount };
         /// <summary>
@@ -263,6 +264,7 @@ public class DbComparer : DbObjectHandler
             // Step 9 - Store result entry for summary
             var fullName = $"{schema}.{proc}";
             var tags = objectTags.GetValueOrDefault(fullName, new List<string>());
+            var doc = objectDocs.GetValueOrDefault(fullName, string.Empty);
             results.Add(new dbObjectResult
             {
                 Type = "Proc",
@@ -271,13 +273,14 @@ public class DbComparer : DbObjectHandler
                 IsDestinationEmpty = isDestinationEmpty,
                 IsEqual = areEqual,
                 SourceBody = sourceBody,
-                DestinationBody = isDestinationEmpty? null: destinationBody,
+                DestinationBody = isDestinationEmpty ? null : destinationBody,
                 SourceFile = isVisible ? Path.Combine(safeSchema, sourceFile) : null,
                 DestinationFile = isVisible ? Path.Combine(safeSchema, destinationFile) : null,
                 DifferencesFile = isDifferencesVisible ? Path.Combine(safeSchema, differencesFile) : null,
                 NewFile = wasAltered ? Path.Combine(safeSchema, newFile) : null,
                 IsTenantSpecific = isTenantSpecific,
-                Tags = tags
+                Tags = tags,
+                Documentation = doc
             });
         });
 
@@ -294,7 +297,7 @@ public class DbComparer : DbObjectHandler
 
         };
     }
-    public static summaryReportDto CompareViews(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, int threadCount)
+    public static summaryReportDto CompareViews(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, Dictionary<string, string> objectDocs, int threadCount)
     {
         ParallelOptions parallelOptions = new() { MaxDegreeOfParallelism = threadCount };
         /// <summary>
@@ -398,6 +401,7 @@ public class DbComparer : DbObjectHandler
             // Step 9 - Store result entry for summary
             var fullName = $"{schema}.{view}";
             var tags = objectTags.GetValueOrDefault(fullName, new List<string>());
+            var doc = objectDocs.GetValueOrDefault(fullName, string.Empty); 
             results.Add(new dbObjectResult
             {
                 Type = "View",
@@ -412,7 +416,8 @@ public class DbComparer : DbObjectHandler
                 DifferencesFile = isDifferencesVisible ? Path.Combine(safeSchema, differencesFile) : null,
                 NewFile = wasAltered ? Path.Combine(safeSchema, newFile) : null,
                 IsTenantSpecific = isTenantSpecific,
-                Tags = tags
+                Tags = tags,
+                Documentation = doc
             });
         });
 
@@ -428,7 +433,7 @@ public class DbComparer : DbObjectHandler
             diffsCount = viewDiffsCount
         };
     }
-    public static summaryReportDto CompareTables(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, int threadCount)
+    public static summaryReportDto CompareTables(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, Dictionary<string, string> objectDocs, int threadCount)
     {
         ParallelOptions parallelOptions = new() { MaxDegreeOfParallelism = threadCount };
         /// <summary>
@@ -610,6 +615,7 @@ public class DbComparer : DbObjectHandler
             // Step 10 - Store result entry for summary
             var fullName = $"{schema}.{table}";
             var tags = objectTags.GetValueOrDefault(fullName, new List<string>());
+            var doc = objectDocs.GetValueOrDefault(fullName, string.Empty); 
             var resultItem = new dbObjectResult
             {
                 Type = "Table",
@@ -625,7 +631,8 @@ public class DbComparer : DbObjectHandler
                 DestinationFile = isVisible ? Path.Combine(safeSchema, destinationFile) : null,
                 DifferencesFile = isDifferencesVisible ? Path.Combine(safeSchema, differencesFile) : null,
                 NewFile = wasAltered ? Path.Combine(safeSchema, newFile) : null,
-                Tags = tags
+                Tags = tags,
+                Documentation = doc
             };
 
             lock (resultsLock)
@@ -646,7 +653,7 @@ public class DbComparer : DbObjectHandler
             diffsCount = tableDiffsCount
         };
     }
-    public static summaryReportDto CompareUdts(DbServer sourceServer,DbServer destinationServer, string outputFolder,ComparerAction makeChange,DbObjectFilter filter,Run run,HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, int threadCount)
+    public static summaryReportDto CompareUdts(DbServer sourceServer,DbServer destinationServer, string outputFolder,ComparerAction makeChange,DbObjectFilter filter,Run run,HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, Dictionary<string, string> objectDocs, int threadCount)
     {
         ParallelOptions parallelOptions = new() { MaxDegreeOfParallelism = threadCount };
 
@@ -733,6 +740,7 @@ public class DbComparer : DbObjectHandler
             // 9) Summary row
             var fullName = $"{schema}.{name}";
             var tags = objectTags.GetValueOrDefault(fullName, new List<string>());
+            var doc = objectDocs.GetValueOrDefault(fullName, string.Empty);
             results.Add(new dbObjectResult
             {
                 Type = "UDT",
@@ -746,7 +754,8 @@ public class DbComparer : DbObjectHandler
                 DestinationFile = isVisible ? Path.Combine(safeSchema, destinationFile) : null,
                 DifferencesFile = isDifferencesVisible ? Path.Combine(safeSchema, differencesFile) : null,
                 NewFile = null,
-                Tags = tags
+                Tags = tags,
+                Documentation = doc
             });
         });
 

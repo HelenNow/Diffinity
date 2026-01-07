@@ -177,6 +177,7 @@ public class DbObjectHandler
         public List<ForeignKeyDto> SourceForeignKeys { get; set; }
         public List<ForeignKeyDto> DestinationForeignKeys { get; set; }
         public List<string> Tags { get; set; } = new List<string>();
+        public string Documentation { get; set; }
     }
 
 }
