@@ -169,7 +169,7 @@ public static class HtmlReportWriter
 <html lang=""en"">
 <head>
     <meta charset=""UTF-8"">
-    <title>{MetaData} Comparison Summary</title>
+    <title>Diffinity Report</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
