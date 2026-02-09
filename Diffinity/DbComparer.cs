@@ -8,7 +8,7 @@ using Serilog;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using static Diffinity.DbComparer;
-
+using Diffinity.FunctionHelper;
 
 namespace Diffinity;
 public enum ComparerAction
@@ -27,6 +27,7 @@ public enum Run
     View,
     Table,
     Udt,
+    Function,
     ProcView,
     ProcTable,
     ViewTable,
@@ -103,6 +104,15 @@ public class DbComparer : DbObjectHandler
                     sw.Stop();
                     return HtmlReportWriter.WriteIndexSummary(sourceServer, destinationServer, outputFolder, sw.ElapsedMilliseconds, ignoredReport.path, udtIndexPath: UdtReport.path, udtCount: UdtReport.diffsCount, udtsCountText: UdtReport.count);
                 }
+            case Run.Function:
+                {
+                    sw.Start();
+                    var FunctionReport = CompareFunctions(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
+                    File.WriteAllText(FunctionReport.fullPath, FunctionReport.html.Replace("{functionsCount}", FunctionReport.count));
+                    if (ignoredObjects.Any()) File.WriteAllText(ignoredReport.fullPath, ignoredReport.html.Replace("{functionsCount}", FunctionReport.count));
+                    sw.Stop();
+                    return HtmlReportWriter.WriteIndexSummary(sourceServer, destinationServer, outputFolder, sw.ElapsedMilliseconds, ignoredReport.path, functionIndexPath: FunctionReport.path, functionCount: FunctionReport.diffsCount, functionsCountText: FunctionReport.count);
+                }
             case Run.ProcView:
                 {
                     sw.Start();
@@ -143,13 +153,15 @@ public class DbComparer : DbObjectHandler
                     ViewReport = CompareViews(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
                     TableReport = CompareTables(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
                     UdtReport = CompareUdts(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
-                    File.WriteAllText(ProcReport.fullPath, ProcReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count).Replace("{udtsCount}", UdtReport.count));
-                    File.WriteAllText(ViewReport.fullPath, ViewReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count).Replace("{udtsCount}", UdtReport.count));
-                    File.WriteAllText(TableReport.fullPath, TableReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count).Replace("{udtsCount}", UdtReport.count));
-                    File.WriteAllText(UdtReport.fullPath, UdtReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count).Replace("{udtsCount}", UdtReport.count));
-                    if (ignoredObjects.Any()) File.WriteAllText(ignoredReport.fullPath, ignoredReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count).Replace("{udtsCount}", UdtReport.count));
+                    var FunctionReport = CompareFunctions(sourceServer, destinationServer, outputFolder, makeChange.Value, filter.Value, run.Value, ignoredObjects, objectTags, tagColors, threadCount);
+                    File.WriteAllText(ProcReport.fullPath, ProcReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count).Replace("{udtsCount}", UdtReport.count).Replace("{functionsCount}", FunctionReport.count));
+                    File.WriteAllText(ViewReport.fullPath, ViewReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count).Replace("{udtsCount}", UdtReport.count).Replace("{functionsCount}", FunctionReport.count));
+                    File.WriteAllText(TableReport.fullPath, TableReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count).Replace("{udtsCount}", UdtReport.count).Replace("{functionsCount}", FunctionReport.count));
+                    File.WriteAllText(UdtReport.fullPath, UdtReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count).Replace("{udtsCount}", UdtReport.count).Replace("{functionsCount}", FunctionReport.count));
+                    File.WriteAllText(FunctionReport.fullPath, FunctionReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count).Replace("{udtsCount}", UdtReport.count).Replace("{functionsCount}", FunctionReport.count));
+                    if (ignoredObjects.Any()) File.WriteAllText(ignoredReport.fullPath, ignoredReport.html.Replace("{procsCount}", ProcReport.count).Replace("{viewsCount}", ViewReport.count).Replace("{tablesCount}", TableReport.count).Replace("{udtsCount}", UdtReport.count).Replace("{functionsCount}", FunctionReport.count));
                     sw.Stop();
-                    return HtmlReportWriter.WriteIndexSummary(sourceServer, destinationServer, outputFolder, sw.ElapsedMilliseconds, ignoredReport.path, procIndexPath: ProcReport.path, viewIndexPath: ViewReport.path, tableIndexPath: TableReport.path, udtIndexPath: UdtReport.path, procCount: ProcReport.diffsCount, viewCount: ViewReport.diffsCount, tableCount: TableReport.diffsCount, udtCount: UdtReport.diffsCount, procsCountText: ProcReport.count, viewsCountText: ViewReport.count, tablesCountText: TableReport.count, udtsCountText: UdtReport.count);
+                    return HtmlReportWriter.WriteIndexSummary(sourceServer, destinationServer, outputFolder, sw.ElapsedMilliseconds, ignoredReport.path, procIndexPath: ProcReport.path, viewIndexPath: ViewReport.path, tableIndexPath: TableReport.path, udtIndexPath: UdtReport.path, functionIndexPath: FunctionReport.path, procCount: ProcReport.diffsCount, viewCount: ViewReport.diffsCount, tableCount: TableReport.diffsCount, udtCount: UdtReport.diffsCount, functionCount: FunctionReport.diffsCount, procsCountText: ProcReport.count, viewsCountText: ViewReport.count, tablesCountText: TableReport.count, udtsCountText: UdtReport.count, functionsCountText: FunctionReport.count);
                 }
             default:
                 throw new ArgumentOutOfRangeException(nameof(run), run, "Invalid Run option");
@@ -764,6 +776,148 @@ public class DbComparer : DbObjectHandler
             html = udtHtml,
             count = udtCount,
             diffsCount = udtDiffsCount
+        };
+    }
+    private static summaryReportDto CompareFunctions(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, int threadCount)
+    {
+        ParallelOptions parallelOptions = new() { MaxDegreeOfParallelism = threadCount };
+
+        // 1) Folders
+        Directory.CreateDirectory(outputFolder);
+        string functionsFolderPath = Path.Combine(outputFolder, "Functions");
+        Directory.CreateDirectory(functionsFolderPath);
+
+        // 2) Ignored meta
+        bool isIgnoredEmpty = !ignoredObjects.Any();
+        string ignoredCount = ignoredObjects.Count.ToString();
+
+        // 3) Pull function names from source
+        var functions = FunctionFetcher.GetFunctionNames(sourceServer.connectionString)
+            .OrderBy(f => f.schema).ThenBy(f => f.name).ToList();
+        var results = new List<dbObjectResult>();
+
+        Serilog.Log.Information("Functions:");
+
+        // 4) Compare bodies
+        Parallel.ForEach(functions, parallelOptions, function =>
+        {
+            string schema = function.schema;
+            string name = function.name;
+            string full = $"{schema}.{name}";
+            string safeSchema = MakeSafe(schema);
+            string safeName = MakeSafe(name);
+
+            if (ignoredObjects.Any(ignore =>
+            {
+                var parts = ignore.Split('.');
+                var safeParts = parts.Select(part => part == "*" ? "*" : MakeSafe(part));
+                var safeIgnore = string.Join(".", safeParts);
+
+                if (ignore.EndsWith(".*"))
+                    return safeIgnore == safeSchema + ".*";
+
+                return safeIgnore == safeSchema + "." + safeName;
+            }))
+            {
+                Log.Information($"{schema}.{name}: Ignored");
+                return;
+            }
+
+            string schemaFolder = Path.Combine(functionsFolderPath, safeSchema);
+
+            // 5) Get function bodies from both servers
+            (string sourceBody, string destBody) = FunctionFetcher.GetFunctionBody(
+                sourceServer.connectionString, destinationServer.connectionString, schema, name);
+
+            var marker = @"--\s*diffinity\s*:\s*client(?:\s*-\s*|\s+)specific\b";
+            bool isTenantSpecific =
+                (!string.IsNullOrWhiteSpace(sourceBody) &&
+                 Regex.IsMatch(sourceBody, marker, RegexOptions.IgnoreCase | RegexOptions.Multiline)) ||
+                (!string.IsNullOrWhiteSpace(destBody) &&
+                 Regex.IsMatch(destBody, marker, RegexOptions.IgnoreCase | RegexOptions.Multiline));
+
+            bool areEqual = AreBodiesEqual(sourceBody, destBody);
+            bool isDestinationEmpty = string.IsNullOrWhiteSpace(destBody);
+            string change = areEqual ? "No changes" : "Changes detected";
+            Serilog.Log.Information($"{full}: {change}");
+
+            // 6) Files
+            string sourceFile = $"{safeName}_{sourceServer.name}.html";
+            string destinationFile = $"{safeName}_{destinationServer.name}.html";
+            string differencesFile = $"{safeName}_differences.html";
+            string newFile = $"{safeName}_new.sql";
+            string returnPage = Path.Combine("..", "index.html");
+
+            bool isVisible = false, isDifferencesVisible = false;
+
+            // 7) Output HTML
+            if ((areEqual && filter == DbObjectFilter.ShowUnchanged) || !areEqual)
+            {
+                Directory.CreateDirectory(schemaFolder);
+                HtmlReportWriter.WriteBodyHtml(Path.Combine(schemaFolder, sourceFile),
+                    $"{sourceServer.name}", sourceBody, returnPage);
+                HtmlReportWriter.WriteBodyHtml(Path.Combine(schemaFolder, destinationFile),
+                    $"{destinationServer.name}", destBody, returnPage);
+
+                if (!isDestinationEmpty && !areEqual)
+                {
+                    HtmlReportWriter.DifferencesWriter(
+                        Path.Combine(schemaFolder, differencesFile),
+                        sourceServer.name, destinationServer.name,
+                        sourceBody, destBody,
+                        "Differences", $"{schema}.{name}", returnPage);
+                    isDifferencesVisible = true;
+                }
+                isVisible = true;
+            }
+
+            // 8) Apply changes if requested
+            string? newFilePath = null;
+            if (makeChange == ComparerAction.ApplyChanges && !areEqual)
+            {
+                AlterDbObject(destinationServer.connectionString, sourceBody, destBody);
+                Directory.CreateDirectory(schemaFolder);
+                File.WriteAllText(Path.Combine(schemaFolder, newFile), sourceBody);
+                newFilePath = Path.Combine(safeSchema, newFile);
+            }
+
+            // 9) Summary row
+            var fullName = $"{schema}.{name}";
+            var tags = objectTags.GetValueOrDefault(fullName, new List<string>());
+            results.Add(new dbObjectResult
+            {
+                Type = "FUNCTION",
+                Name = name,
+                schema = schema,
+                IsDestinationEmpty = isDestinationEmpty,
+                IsEqual = areEqual,
+                SourceBody = sourceBody,
+                DestinationBody = isDestinationEmpty ? null : destBody,
+                SourceFile = isVisible ? Path.Combine(safeSchema, sourceFile) : null,
+                DestinationFile = isVisible ? Path.Combine(safeSchema, destinationFile) : null,
+                DifferencesFile = isDifferencesVisible ? Path.Combine(safeSchema, differencesFile) : null,
+                NewFile = newFilePath,
+                IsTenantSpecific = isTenantSpecific,
+                Tags = tags
+            });
+        });
+
+        // 10) Summary page
+        (string functionHtml, string functionCount) = HtmlReportWriter.WriteSummaryReport(
+            sourceServer, destinationServer, Path.Combine(functionsFolderPath, "index.html"),
+            results, filter, run, isIgnoredEmpty, ignoredCount, tagColors);
+
+        int functionDiffsCount = filter == DbObjectFilter.HideUnchanged
+            ? results.Count(r => r.IsDestinationEmpty || (!r.IsDestinationEmpty && !r.IsEqual))
+            : results.Count();
+
+        return new summaryReportDto
+        {
+            path = "Functions/index.html",
+            fullPath = Path.Combine(functionsFolderPath, "index.html"),
+            html = functionHtml,
+            count = functionCount,
+            diffsCount = functionDiffsCount
         };
     }
     private static string MakeSafe(string name)
