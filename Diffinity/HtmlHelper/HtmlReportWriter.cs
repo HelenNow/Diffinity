@@ -838,7 +838,7 @@ public static class HtmlReportWriter
     /// <summary>
     /// Writes the main index summary HTML page linking to individual reports for procedures, views, and tables.
     /// </summary>
-    public static string WriteIndexSummary(DbServer source, DbServer destination,string outputPath, long Duration, string? ignoredIndexPath = null, string? procIndexPath = null, string? viewIndexPath = null, string? tableIndexPath = null, string? udtIndexPath = null, int? procCount = 0, int? viewCount = 0 , int? tableCount = 0, int? udtCount = 0, string? procsCountText = null, string? viewsCountText = null, string? tablesCountText = null, string? udtsCountText = null)
+    public static string WriteIndexSummary(DbServer source, DbServer destination,string outputPath, long Duration, string? ignoredIndexPath = null, string? procIndexPath = null, string? viewIndexPath = null, string? tableIndexPath = null, string? udtIndexPath = null, int? procCount = 0, int? viewCount = 0 , int? tableCount = 0, int? udtCount = 0, string? procsCountText = null, string? viewsCountText = null, string? tablesCountText = null, string? udtsCountText = null, string? functionIndexPath = null,int functionCount = 0,string? functionsCountText = null)
     {
         string sourceImagesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "HtmlHelper", "images");
         string destImagesPath = Path.Combine(outputPath, "images");
@@ -1021,6 +1021,26 @@ public static class HtmlReportWriter
         <td>{(tenantC > 0 ? $@"<a href=""{procIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
     </tr>");
         }
+        if (functionCount > 0 && !string.IsNullOrWhiteSpace(functionIndexPath))
+        {
+            var (newC, unchangedC, changedC, tenantC) = ParseCounts(functionsCountText);
+            summaryTable.AppendLine(legendHasUnchanged
+                ? $@"
+    <tr>
+        <td id=""left""><a href=""{functionIndexPath}"">Functions</a></td>
+        <td>{(newC > 0 ? $@"<a href=""{functionIndexPath}#new"">{newC}</a>" : "")}</td>
+        <td>{(unchangedC > 0 ? $@"<a href=""{functionIndexPath}#unchanged"">{unchangedC}</a>" : "")}</td>
+        <td>{(changedC > 0 ? $@"<a href=""{functionIndexPath}#changed"">{changedC}</a>" : "")}</td>
+        <td>{(tenantC > 0 ? $@"<a href=""{functionIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
+    </tr>"
+                : $@"
+    <tr>
+        <td id=""left""><a href=""{functionIndexPath}"">Functions</a></td>
+        <td>{(newC > 0 ? $@"<a href=""{functionIndexPath}#new"">{newC}</a>" : "")}</td>
+        <td>{(changedC > 0 ? $@"<a href=""{functionIndexPath}#changed"">{changedC}</a>" : "")}</td>
+        <td>{(tenantC > 0 ? $@"<a href=""{functionIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
+    </tr>");
+        }
 
         summaryTable.AppendLine("</table>");
 
@@ -1050,6 +1070,12 @@ public static class HtmlReportWriter
     /// </summary>
     public static (string html, string countObjects) WriteSummaryReport(DbServer sourceServer, DbServer destinationServer, string summaryPath, List<dbObjectResult> results, DbObjectFilter filter, Run run, bool isIgnoredEmpty, string ignoredCount, Dictionary<string, string> tagColors)
     {
+        if (results == null || results.Count == 0)
+        {
+            string emptyCount = filter == DbObjectFilter.ShowUnchanged ? "(0/0/0/0)" : "(0/0/0)";
+            return (string.Empty, emptyCount);
+        }
+
         results = results.OrderBy(r => r.schema).ThenBy(r => r.Name).ToList();
         StringBuilder html = new();
         var result = results[0];
@@ -1078,7 +1104,43 @@ public static class HtmlReportWriter
             });
           }
 
-          document.addEventListener('DOMContentLoaded', restoreAll);
+          // Function for copying object names
+          function copyName(button) {
+            const container = button.closest('td');
+            const codeBlock = container.querySelector('.copy-target');
+            const text = codeBlock?.innerText.trim();
+            
+            if (!text) {
+              alert('Nothing to copy!');
+              return;
+            }
+            
+            navigator.clipboard.writeText(text).then(() => {
+              button.classList.add('copied');
+              const key = button.dataset.key;
+              if (key) {
+                STORE.setItem(key, '1');
+              }
+            }).catch(err => {
+              console.error('Copy failed:', err);
+              alert('Failed to copy!');
+            });
+          }
+
+          // Restore copied name states
+          function restoreNameCopiedStates() {
+            document.querySelectorAll('.name-copy-btn').forEach(btn => {
+              const key = btn.dataset.key;
+              if (key && STORE.getItem(key) === '1') {
+                btn.classList.add('copied');
+              }
+            });
+          }
+
+          document.addEventListener('DOMContentLoaded', function() {
+            restoreAll();
+            restoreNameCopiedStates();
+          });
         </script>"
 
 );
@@ -1115,8 +1177,7 @@ public static class HtmlReportWriter
                 string checkboxCell = $@"<label class='pick'><input type='checkbox' class='sel-new'></label>";
                 string copyButton = $@"<button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button><br>
                 <span class=""copy-target copy-new"" style=""display:none;"">{copyPayload}</span>";
-                string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyPane(this)"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
-                string tagsHtml = item.Tags.Any()
+                string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyName(this)"" data-key=""name-copied|{item.schema}.{item.Name}"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>"; string tagsHtml = item.Tags.Any()
                     ? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag =>
                     {
                         string bgColor = tagColors.ContainsKey(tag) ? tagColors[tag] : "#e3f2fd";
@@ -1231,7 +1292,7 @@ public static class HtmlReportWriter
                     ? CreateTableScript(item.schema, item.Name, item.SourceTableInfo, item.SourceForeignKeys)
                     : item.SourceBody;
 
-                string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyPane(this)"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
+                string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyName(this)"" data-key=""name-copied|{item.schema}.{item.Name}"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
                 string sourceLink = $@"<a href=""{item.SourceFile}"">View</a";
                 string copyButton = $@"<button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button><br>
                 <span class=""copy-target"" style=""display:none;"">{copyPayload}</span>";
@@ -1306,7 +1367,7 @@ public static class HtmlReportWriter
             // For procs/views: use body as-is
             string sourceCopy = item.SourceBody;
             string destCopy = item.DestinationBody;
-            string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyPane(this)"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
+            string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyName(this)"" data-key=""name-copied|{item.schema}.{item.Name}"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
             string tagsHtml = item.Tags.Any()
                 ? $@"<div class=""tag-container"">{string.Join("", item.Tags.Select(tag =>
                 {
@@ -1482,7 +1543,8 @@ public static class HtmlReportWriter
                     destCopy = CreateAlterTableScript(item.schema, item.Name, item.SourceTableInfo, item.DestinationTableInfo, item.SourceForeignKeys, item.DestinationForeignKeys);
                 }
 
-                string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyPane(this)"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>"; string sourceColumn = !string.IsNullOrWhiteSpace(item.SourceFile) ? $@"<label class='pick'>
+                string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyName(this)"" data-key=""name-copied|{item.schema}.{item.Name}"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
+                string sourceColumn = !string.IsNullOrWhiteSpace(item.SourceFile) ? $@"<label class='pick'>
               <input type='checkbox' class='tnt-src'> <a href=""{item.SourceFile}"">View</a></label>
               <button class=""copy-btn"" onclick=""copyPane(this)"">{CopyIcon}{CheckIcon}</button>
               <span class=""copy-target copy-src"" style=""display:none;"">{sourceCopy}</span>" : "—";
@@ -2642,6 +2704,7 @@ public static class HtmlReportWriter
         string tablesPath = "../Tables/index.html";
         string udtsPath = "../UDTs/index.html";
         string ignoredPath = "../Ignored/index.html";
+        string functionsPath = "../Functions/index.html";
         var sb = new StringBuilder();
         sb.AppendLine(@"<nav class=""top-nav"">");
         switch (run)
@@ -2657,6 +2720,9 @@ public static class HtmlReportWriter
                 break;
             case Run.Udt:
                 sb.AppendLine($@"  <a href=""{udtsPath}"">Udts {{udtsCount}}</a>");
+                break;
+            case Run.Function:
+                sb.AppendLine($@"  <a href=""{functionsPath}"">Functions {{functionsCount}}</a>");
                 break;
             case Run.ProcView:
                 sb.AppendLine($@"  <a href=""{viewsPath}"">Views {{viewsCount}}</a>");
@@ -2676,6 +2742,7 @@ public static class HtmlReportWriter
                 sb.AppendLine($@"  <a href=""{tablesPath}"">Tables {{tablesCount}}</a>");
                 sb.AppendLine($@"  <a href=""{viewsPath}"">Views {{viewsCount}}</a>");
                 sb.AppendLine($@"  <a href=""{proceduresPath}"">Procedures {{procsCount}}</a>");
+                sb.AppendLine($@"  <a href=""{functionsPath}"">Functions {{functionsCount}}</a>");
                 break;
 
             default:
