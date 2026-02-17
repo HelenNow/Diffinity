@@ -97,16 +97,23 @@ public class DbObjectHandler
         {
             if (input == null) return null;
 
-            // Normalize the input for consistent comparison
-            string normalized = input.Replace("create", "CREATE")
-                                   .Replace("Create", "CREATE")
-                                   .Replace("\r\n", "\n")
-                                   .Replace(" ", "")
-                                   .Replace("\t", "")
-                                   .Replace("\n", "")
-                                   .Replace("[", "")
-                                   .Replace("]", "")
-                                   .Trim();
+            string normalized = Regex.Replace(input, @"/\*.*?\*/", "", RegexOptions.Singleline);
+            normalized = Regex.Replace(normalized, @"--.*?$", "", RegexOptions.Multiline);
+            normalized = normalized.ToUpperInvariant();
+            normalized = Regex.Replace(normalized, @"\bCREATE\s+OR\s+ALTER\b", "CREATE");
+            normalized = Regex.Replace(normalized, @"\bGO\b", "");
+            normalized = normalized.Replace("[", "").Replace("]", "");
+            normalized = Regex.Replace(normalized, @"\bAS\s+", " ");
+            normalized = Regex.Replace(normalized, @"\s+", " ");
+            normalized = Regex.Replace(normalized, @"\s*\.\s*", ".");   
+            normalized = Regex.Replace(normalized, @"\s*,\s*", ",");    
+            normalized = Regex.Replace(normalized, @"\s*;\s*", ";");    
+            normalized = Regex.Replace(normalized, @"\s*\(\s*", "(");   
+            normalized = Regex.Replace(normalized, @"\s*\)\s*", ")");   
+            normalized = Regex.Replace(normalized, @"\s*=\s*", "=");    
+            normalized = Regex.Replace(normalized, @"\s*>\s*", ">");    
+            normalized = Regex.Replace(normalized, @"\s*<\s*", "<");    
+            normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
 
             // Convert normalized string to bytes
             byte[] inputBytes = Encoding.UTF8.GetBytes(normalized);

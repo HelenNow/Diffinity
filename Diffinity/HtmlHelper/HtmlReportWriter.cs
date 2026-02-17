@@ -28,7 +28,7 @@ public static class HtmlReportWriter
 <html lang=""en"">
 <head>
     <meta charset=""UTF-8"">
-    <title>Database Comparison Index</title>
+    <title>Diffinity Report</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -169,7 +169,7 @@ public static class HtmlReportWriter
 <html lang=""en"">
 <head>
     <meta charset=""UTF-8"">
-    <title>{MetaData} Comparison Summary</title>
+    <title>Diffinity Report</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -416,7 +416,7 @@ public static class HtmlReportWriter
 <html lang=""en"">
 <head>
     <meta charset=""UTF-8"">
-    <title>Ignored Summary</title>
+    <titleDiffinity Report</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -537,7 +537,7 @@ public static class HtmlReportWriter
 <html lang=""en"">
 <head>
     <meta charset=""UTF-8"">
-    <title>{title}</title>
+    <title>Diffinity Report</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -689,7 +689,7 @@ public static class HtmlReportWriter
        <html>
        <head>
        <meta charset='utf-8' />
-       <title>{title}</title>
+       <title>Diffinity Report</title>
        <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -1056,8 +1056,7 @@ public static class HtmlReportWriter
               .Replace("{Date}", Date)
               .Replace("{Duration}", formattedDuration)
         );
-        string indexPath = Path.Combine(outputPath, "index.html");
-
+        string indexPath = Path.Combine(outputPath, $"{source.name}_{destination.name}.html");
         // Write to index.html
         File.WriteAllText(indexPath, html.ToString());
         return indexPath;
@@ -1079,7 +1078,7 @@ public static class HtmlReportWriter
         results = results.OrderBy(r => r.schema).ThenBy(r => r.Name).ToList();
         StringBuilder html = new();
         var result = results[0];
-        string returnPage = Path.Combine("..", "index.html");
+        string returnPage = $"../{sourceServer.name}_{destinationServer.name}.html";
         html.Append(ComparisonTemplate.Replace("{source}", sourceServer.name).Replace("{destination}", destinationServer.name).Replace("{MetaData}", result.Type).Replace("{nav}", BuildNav(run, isIgnoredEmpty, ignoredCount)).Replace("{selectAllSrc}", "chk-src-all").Replace("{selectAllDst}", "chk-dst-all"));
         html.AppendLine(@"
         <script>
@@ -1660,7 +1659,7 @@ public static class HtmlReportWriter
     #endregion
 
     #region Ignored Report Writer
-    public static DbComparer.summaryReportDto WriteIgnoredReport(string outputFolder, HashSet<string> ignoredObjects, Run run)
+    public static DbComparer.summaryReportDto WriteIgnoredReport(string outputFolder, HashSet<string> ignoredObjects, Run run, DbServer source, DbServer destination)
     {
         #region 1- Setup folder structure for reports
         Directory.CreateDirectory(outputFolder);
@@ -1669,7 +1668,7 @@ public static class HtmlReportWriter
         #endregion
 
         StringBuilder html = new();
-        string returnPage = Path.Combine("..", "index.html");
+        string returnPage = $"../{source.name}_{destination.name}.html";
         string ignoredCount = ignoredObjects.Count().ToString();
         html.Append(IgnoredTemplate.Replace("{nav}", BuildNav(run, false, ignoredCount)));
 
