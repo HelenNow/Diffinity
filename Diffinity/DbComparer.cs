@@ -58,7 +58,7 @@ public class DbComparer : DbObjectHandler
         var ignoredObjects = DiffIgnoreLoader.LoadIgnoredObjects();
         var objectTags = DiffTagsLoader.LoadObjectTags();
         var tagColors = DiffTagColorsLoader.LoadTagColors();
-        summaryReportDto ignoredReport = !ignoredObjects.Any() ? new summaryReportDto() : HtmlReportWriter.WriteIgnoredReport(outputFolder, ignoredObjects, run.Value);
+        summaryReportDto ignoredReport = !ignoredObjects.Any() ? new summaryReportDto() : HtmlReportWriter.WriteIgnoredReport(outputFolder, ignoredObjects, run.Value, sourceServer, destinationServer);
         summaryReportDto ProcReport;
         summaryReportDto ViewReport;
         summaryReportDto TableReport;
