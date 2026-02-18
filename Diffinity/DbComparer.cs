@@ -273,8 +273,7 @@ public class DbComparer : DbObjectHandler
             }
 
             // Step 9 - Store result entry for summary
-            var fullName = $"{schema}.{proc}";
-            var tags = objectTags.GetValueOrDefault(fullName, new List<string>());
+            var tags = DiffTagsLoader.GetTagsForObject(objectTags, schema, proc);
             results.Add(new dbObjectResult
             {
                 Type = "Proc",
@@ -408,8 +407,7 @@ public class DbComparer : DbObjectHandler
             }
 
             // Step 9 - Store result entry for summary
-            var fullName = $"{schema}.{view}";
-            var tags = objectTags.GetValueOrDefault(fullName, new List<string>());
+            var tags = DiffTagsLoader.GetTagsForObject(objectTags, schema, view);
             results.Add(new dbObjectResult
             {
                 Type = "View",
@@ -620,8 +618,7 @@ public class DbComparer : DbObjectHandler
             }
 
             // Step 10 - Store result entry for summary
-            var fullName = $"{schema}.{table}";
-            var tags = objectTags.GetValueOrDefault(fullName, new List<string>());
+            var tags = DiffTagsLoader.GetTagsForObject(objectTags, schema, table);
             var resultItem = new dbObjectResult
             {
                 Type = "Table",
@@ -743,8 +740,7 @@ public class DbComparer : DbObjectHandler
 
 
             // 9) Summary row
-            var fullName = $"{schema}.{name}";
-            var tags = objectTags.GetValueOrDefault(fullName, new List<string>());
+            var tags = DiffTagsLoader.GetTagsForObject(objectTags, schema, name);
             results.Add(new dbObjectResult
             {
                 Type = "UDT",
@@ -882,8 +878,7 @@ public class DbComparer : DbObjectHandler
             }
 
             // 9) Summary row
-            var fullName = $"{schema}.{name}";
-            var tags = objectTags.GetValueOrDefault(fullName, new List<string>());
+            var tags = DiffTagsLoader.GetTagsForObject(objectTags, schema, name);
             results.Add(new dbObjectResult
             {
                 Type = "FUNCTION",
