@@ -52,7 +52,11 @@ public class DbComparer : DbObjectHandler
         /// <summary>
         /// Executes comparison of database object types based on the specified Run option and returns the corresponding summary report.
         /// </summary>
-        if (outputFolder == null) { outputFolder = _outputFolder; }
+        if (outputFolder == null)
+        {
+            string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+            outputFolder = $"{sourceServer.name}_{destinationServer.name}_{timestamp}";
+        }
         if (logger == null) { logger = Log.Logger; }
 
         var ignoredObjects = DiffIgnoreLoader.LoadIgnoredObjects();
