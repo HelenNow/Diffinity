@@ -1225,7 +1225,7 @@ public static class HtmlReportWriter
             {
 
                 string copyPayload = item.Type == "Table"
-                    ? CreateTableScript(item.schema, item.Name, item.SourceTableInfo, item.SourceForeignKeys)
+                    ? CreateTableScript(item.schema, item.Name, item.SourceTableInfo, item.SourceForeignKeys, item.SourceIndexes)
                     : item.SourceBody;
 
                 string sourceLink = $@"<a href=""{item.SourceFile}"">View</a>";
@@ -1344,7 +1344,7 @@ public static class HtmlReportWriter
             foreach (var item in unchangedObjects)
             {
                 string copyPayload = item.Type == "Table"
-                    ? CreateTableScript(item.schema, item.Name, item.SourceTableInfo, item.SourceForeignKeys)
+                    ? CreateTableScript(item.schema, item.Name, item.SourceTableInfo, item.SourceForeignKeys, item.SourceIndexes)
                     : item.SourceBody;
 
                 string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyName(this)"" data-key=""name-copied|{item.schema}.{item.Name}"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
@@ -1434,10 +1434,10 @@ public static class HtmlReportWriter
             if (item.Type == "Table")
             {
                 // Source copy button gets script to alter the SOURCE table (make it match destination)
-                sourceCopy = CreateAlterTableScript(item.schema, item.Name, item.SourceTableInfo, item.DestinationTableInfo, item.SourceForeignKeys, item.DestinationForeignKeys);
+                sourceCopy = CreateAlterTableScript(item.schema, item.Name, item.SourceTableInfo, item.DestinationTableInfo, item.SourceForeignKeys, item.DestinationForeignKeys, item.SourceIndexes, item.DestinationIndexes);
 
                 // Destination copy button gets script to alter the DESTINATION table (make it match source)
-                destCopy = CreateAlterTableScript(item.schema, item.Name, item.DestinationTableInfo, item.SourceTableInfo, item.DestinationForeignKeys, item.SourceForeignKeys);
+                destCopy = CreateAlterTableScript(item.schema, item.Name, item.DestinationTableInfo, item.SourceTableInfo, item.DestinationForeignKeys, item.SourceForeignKeys, item.DestinationIndexes, item.SourceIndexes);
             }
 
             // Prepare file links
@@ -1594,8 +1594,8 @@ public static class HtmlReportWriter
 
                 if (item.Type == "Table")
                 {
-                    sourceCopy = CreateAlterTableScript(item.schema, item.Name, item.DestinationTableInfo, item.SourceTableInfo, item.DestinationForeignKeys, item.SourceForeignKeys);
-                    destCopy = CreateAlterTableScript(item.schema, item.Name, item.SourceTableInfo, item.DestinationTableInfo, item.SourceForeignKeys, item.DestinationForeignKeys);
+                    sourceCopy = CreateAlterTableScript(item.schema, item.Name, item.DestinationTableInfo, item.SourceTableInfo, item.DestinationForeignKeys, item.SourceForeignKeys, item.DestinationIndexes, item.SourceIndexes);
+                    destCopy = CreateAlterTableScript(item.schema, item.Name, item.SourceTableInfo, item.DestinationTableInfo, item.SourceForeignKeys, item.DestinationForeignKeys, item.SourceIndexes, item.DestinationIndexes);
                 }
 
                 string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyName(this)"" data-key=""name-copied|{item.schema}.{item.Name}"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
@@ -1934,7 +1934,7 @@ public static class HtmlReportWriter
     /// <summary>
     /// Prints table column details with to show the differences 
     /// </summary>
-    public static void TableDifferencesWriter(string filePath, string sourceName, string destinationName,List<tableDto> sourceTable, List<tableDto> destinationTable, List<string> differences,string title, string objectName, string returnPage,List<ForeignKeyDto> sourceFKs = null, List<ForeignKeyDto> destFKs = null)
+    public static void TableDifferencesWriter(string filePath, string sourceName, string destinationName,List<tableDto> sourceTable, List<tableDto> destinationTable, List<string> differences,string title, string objectName, string returnPage,List<ForeignKeyDto> sourceFKs = null, List<ForeignKeyDto> destFKs = null, List<IndexDto> sourceIndexes = null, List<IndexDto> destIndexes = null)
     {
         var html = new StringBuilder();
         html.AppendLine(BodyTemplate.Replace("{title}", title));
@@ -1944,8 +1944,8 @@ public static class HtmlReportWriter
         string schema = parts.Length > 1 ? parts[0] : "dbo";
         string table = parts.Length > 1 ? parts[1] : objectName;
 
-        string sourceAlterScript = CreateAlterTableScript(schema, table, sourceTable, destinationTable, sourceFKs, destFKs);
-        string destAlterScript = CreateAlterTableScript(schema, table, destinationTable, sourceTable, destFKs, sourceFKs);
+        string sourceAlterScript = CreateAlterTableScript(schema, table, sourceTable, destinationTable, sourceFKs, destFKs, sourceIndexes, destIndexes);
+        string destAlterScript = CreateAlterTableScript(schema, table, destinationTable, sourceTable, destFKs, sourceFKs, destIndexes, sourceIndexes);
 
         html.AppendLine($@"
     <body>
@@ -2138,8 +2138,12 @@ public static class HtmlReportWriter
             rowNum++;
         }
 
-        html.AppendLine("</table></div></div>");
-        destTableHtml.AppendLine("</table></div></div>");
+        html.AppendLine("</table>");
+        html.AppendLine(PrintIndexTable(schema, table, sourceIndexes, differences, destIndexes, isSourceSide: true, copyIdPrefix: "src-idx"));
+        html.AppendLine("</div></div>");
+        destTableHtml.AppendLine("</table>");
+        destTableHtml.AppendLine(PrintIndexTable(schema, table, destIndexes, differences, sourceIndexes, isSourceSide: false, copyIdPrefix: "dst-idx"));
+        destTableHtml.AppendLine("</div></div>");
         html.AppendLine(destTableHtml.ToString());
 
         // Hidden spans containing the full table ALTER scripts
@@ -2288,7 +2292,7 @@ public static class HtmlReportWriter
 
         return "";
     }
-    public static string CreateTableScript(string schema, string table, List<tableDto> cols, List<ForeignKeyDto> foreignKeys = null)
+    public static string CreateTableScript(string schema, string table, List<tableDto> cols, List<ForeignKeyDto> foreignKeys = null, List<IndexDto> indexes = null)
     {
         if (cols == null || cols.Count == 0)
             return $"-- Table [{schema}].[{table}] has no columns?";
@@ -2333,10 +2337,20 @@ public static class HtmlReportWriter
         }
 
         sb.AppendLine(");");
+
+        if (indexes != null && indexes.Any())
+        {
+            sb.AppendLine();
+            foreach (var index in indexes)
+            {
+                sb.AppendLine(BuildCreateIndexStatement(schema, table, index));
+            }
+        }
+
         return sb.ToString();
     }
 
-    public static string CreateAlterTableScript(string schema, string table, List<tableDto> sourceColumns, List<tableDto> targetColumns, List<ForeignKeyDto> sourceFKs = null, List<ForeignKeyDto> targetFKs = null)
+    public static string CreateAlterTableScript(string schema, string table, List<tableDto> sourceColumns, List<tableDto> targetColumns, List<ForeignKeyDto> sourceFKs = null, List<ForeignKeyDto> targetFKs = null, List<IndexDto> sourceIndexes = null, List<IndexDto> targetIndexes = null)
     {
         if (sourceColumns == null || targetColumns == null)
             return $"-- Cannot generate ALTER script for [{schema}].[{table}]";
@@ -2557,6 +2571,49 @@ public static class HtmlReportWriter
 
         if (fksToAdd.Any())
             sb.AppendLine();
+
+        var sourceIndexMap = (sourceIndexes ?? new List<IndexDto>()).ToDictionary(i => i.IndexName, StringComparer.OrdinalIgnoreCase);
+        var targetIndexMap = (targetIndexes ?? new List<IndexDto>()).ToDictionary(i => i.IndexName, StringComparer.OrdinalIgnoreCase);
+        var indexesToDrop = new List<string>();
+        var indexesToAdd = new List<IndexDto>();
+
+        foreach (var sourceIndex in sourceIndexMap)
+        {
+            if (!targetIndexMap.TryGetValue(sourceIndex.Key, out var targetIndex) || !TableIndexComparer.AreDefinitionsEqual(sourceIndex.Value, targetIndex))
+            {
+                indexesToDrop.Add(sourceIndex.Key);
+            }
+        }
+
+        foreach (var targetIndex in targetIndexMap)
+        {
+            if (!sourceIndexMap.TryGetValue(targetIndex.Key, out var sourceIndex) || !TableIndexComparer.AreDefinitionsEqual(sourceIndex, targetIndex.Value))
+            {
+                indexesToAdd.Add(targetIndex.Value);
+            }
+        }
+
+        foreach (var indexName in indexesToDrop)
+        {
+            sb.AppendLine($"DROP INDEX [{indexName}] ON [{schema}].[{table}];");
+            hasChanges = true;
+        }
+
+        if (indexesToDrop.Any())
+        {
+            sb.AppendLine();
+        }
+
+        foreach (var index in indexesToAdd)
+        {
+            sb.AppendLine(BuildCreateIndexStatement(schema, table, index));
+            hasChanges = true;
+        }
+
+        if (indexesToAdd.Any())
+        {
+            sb.AppendLine();
+        }
 
         if (!hasChanges)
         {
@@ -2814,8 +2871,9 @@ public static class HtmlReportWriter
     /// <summary>
     /// Prints table column details with optional difference highlighting.
     /// </summary>
-    public static string PrintTableInfo(List<tableDto> tableInfo, List<string>? differences)
+    public static string PrintTableInfo(string schema, string table, List<tableDto> tableInfo, List<string>? differences, List<IndexDto>? indexes = null)
     {
+        differences ??= new List<string>();
         StringBuilder sb = new StringBuilder();
         sb.AppendLine(@"<table border='1'>
        <tr>
@@ -2875,8 +2933,82 @@ public static class HtmlReportWriter
         }
 
         sb.AppendLine("</table>");
+        sb.AppendLine(PrintIndexTable(schema, table, indexes, differences, null, isSourceSide: true, copyIdPrefix: "idx"));
         return sb.ToString();
 
+    }
+
+    private static string PrintIndexTable(string schema, string table, List<IndexDto>? indexes, List<string>? differences, List<IndexDto>? comparisonIndexes, bool isSourceSide, string copyIdPrefix)
+    {
+        if (indexes == null || !indexes.Any())
+        {
+            return "<h3>Indexes</h3><p>No non-primary-key indexes found.</p>";
+        }
+
+        differences ??= new List<string>();
+        comparisonIndexes ??= new List<IndexDto>();
+        var comparisonMap = comparisonIndexes.ToDictionary(i => i.IndexName, StringComparer.OrdinalIgnoreCase);
+        var sb = new StringBuilder();
+        sb.AppendLine(@"<h3>Indexes</h3>");
+        sb.AppendLine(@"<table border='1'>
+       <tr>
+       <th style='width:10px; padding:0;'></th>
+       <th>Index Name</th>
+       <th>Type</th>
+       <th>Unique</th>
+       <th>Unique Constraint</th>
+       <th>Key Columns</th>
+       <th>Included Columns</th>
+       <th>Filter</th>
+       </tr>");
+
+        int rowNum = 0;
+        foreach (var index in indexes)
+        {
+            string marker = TableIndexComparer.ToMarker(index.IndexName);
+            string rowClass = "";
+            if (comparisonMap.TryGetValue(index.IndexName, out var comparisonIndex))
+            {
+                if (!TableIndexComparer.AreDefinitionsEqual(index, comparisonIndex))
+                {
+                    rowClass = @" class=""difference""";
+                }
+            }
+            else if (differences.Contains(marker))
+            {
+                rowClass = isSourceSide ? @" class=""source""" : @" class=""destination""";
+            }
+
+            string copyId = $"{copyIdPrefix}-{rowNum}";
+            string copyBtn = $@"<button class='copy-btn-small' onclick='copyColumnScript(""{copyId}"")'>{CopyIcon}{CheckIcon}</button>
+                <span id='{copyId}' style='display:none;'>{BuildCreateIndexStatement(schema, table, index)}</span>";
+
+            sb.AppendLine($@"<tr{rowClass}>
+            <td style='text-align:center; width:10px;padding:0;'>{copyBtn}</td>
+            <td>{index.IndexName}</td>
+            <td>{index.IndexType}</td>
+            <td>{(index.IsUnique ? "YES" : "")}</td>
+            <td>{(index.IsUniqueConstraint ? "YES" : "")}</td>
+            <td>{index.KeyColumns}</td>
+            <td>{index.IncludedColumns}</td>
+            <td>{index.FilterDefinition}</td>
+            </tr>");
+            rowNum++;
+        }
+
+        sb.AppendLine("</table>");
+        return sb.ToString();
+    }
+
+    private static string BuildCreateIndexStatement(string schema, string table, IndexDto index)
+    {
+        var unique = index.IsUnique ? "UNIQUE " : "";
+        var clustered = string.Equals(index.IndexType, "CLUSTERED", StringComparison.OrdinalIgnoreCase) ? "CLUSTERED " :
+            string.Equals(index.IndexType, "NONCLUSTERED", StringComparison.OrdinalIgnoreCase) ? "NONCLUSTERED " : "";
+        var includeClause = string.IsNullOrWhiteSpace(index.IncludedColumns) ? "" : $" INCLUDE ({index.IncludedColumns})";
+        var filterClause = string.IsNullOrWhiteSpace(index.FilterDefinition) ? "" : $" WHERE {index.FilterDefinition}";
+
+        return $"CREATE {unique}{clustered}INDEX [{index.IndexName}] ON [{schema}].[{table}] ({index.KeyColumns}){includeClause}{filterClause};";
     }
     private static string GetTextColor(string backgroundColor)
     {

@@ -183,6 +183,8 @@ public class DbObjectHandler
         public string? NewFile { get; set; } // null if not altered
         public List<ForeignKeyDto> SourceForeignKeys { get; set; }
         public List<ForeignKeyDto> DestinationForeignKeys { get; set; }
+        public List<IndexDto> SourceIndexes { get; set; }
+        public List<IndexDto> DestinationIndexes { get; set; }
         public List<string> Tags { get; set; } = new List<string>();
     }
 

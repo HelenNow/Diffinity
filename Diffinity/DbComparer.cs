@@ -531,7 +531,8 @@ public class DbComparer : DbObjectHandler
             // Step 5 - Fetch table column info
             List<string> allDifferences = new List<string>();
             (List<tableDto> sourceInfo, List<tableDto> destinationInfo,
-             List<ForeignKeyDto> sourceFKs, List<ForeignKeyDto> destFKs) =
+             List<ForeignKeyDto> sourceFKs, List<ForeignKeyDto> destFKs,
+             List<IndexDto> sourceIndexes, List<IndexDto> destIndexes) =
                 TableFetcher.GetTableInfo(sourceServer.connectionString, destinationServer.connectionString, schema, table);
 
             bool isDestinationEmpty = destinationInfo.IsNullOrEmpty();
@@ -576,6 +577,14 @@ public class DbComparer : DbObjectHandler
                 isTableEqual = false;
             }
 
+            var indexDifferences = TableIndexComparer.GetDifferenceMarkers(sourceIndexes, destIndexes);
+            if (indexDifferences.Any())
+            {
+                allDifferences.AddRange(indexDifferences);
+                isTableEqual = false;
+                Serilog.Log.Information($"{schema}.{table}: Index changes detected");
+            }
+
             if (isTableEqual && !isDestinationEmpty)
             {
                 Serilog.Log.Information($"{schema}.{table}: No Changes");
@@ -606,23 +615,23 @@ public class DbComparer : DbObjectHandler
 
                 if (isDestinationEmpty)
                 {
-                    sourceTableScript = HtmlReportWriter.CreateTableScript(schema, table, sourceInfo, sourceFKs);
+                    sourceTableScript = HtmlReportWriter.CreateTableScript(schema, table, sourceInfo, sourceFKs, sourceIndexes);
                     destTableScript = null;
                 }
                 else if (isTableEqual)
                 {
-                    sourceTableScript = HtmlReportWriter.CreateTableScript(schema, table, sourceInfo, sourceFKs);
-                    destTableScript = HtmlReportWriter.CreateTableScript(schema, table, destinationInfo, destFKs);
+                    sourceTableScript = HtmlReportWriter.CreateTableScript(schema, table, sourceInfo, sourceFKs, sourceIndexes);
+                    destTableScript = HtmlReportWriter.CreateTableScript(schema, table, destinationInfo, destFKs, destIndexes);
                 }
                 else
                 {
                     // Changed table - use ALTER scripts
-                    sourceTableScript = HtmlReportWriter.CreateAlterTableScript(schema, table, destinationInfo, sourceInfo, destFKs, sourceFKs);
-                    destTableScript = HtmlReportWriter.CreateAlterTableScript(schema, table, sourceInfo, destinationInfo, sourceFKs, destFKs);
+                    sourceTableScript = HtmlReportWriter.CreateAlterTableScript(schema, table, destinationInfo, sourceInfo, destFKs, sourceFKs, destIndexes, sourceIndexes);
+                    destTableScript = HtmlReportWriter.CreateAlterTableScript(schema, table, sourceInfo, destinationInfo, sourceFKs, destFKs, sourceIndexes, destIndexes);
                 }
 
-                HtmlReportWriter.WriteBodyHtml(sourcePath, $"{sourceServer.name} Table", HtmlReportWriter.PrintTableInfo(sourceInfo, allDifferences), returnPage, sourceTableScript);
-                HtmlReportWriter.WriteBodyHtml(destinationPath, $"{destinationServer.name} Table", HtmlReportWriter.PrintTableInfo(destinationInfo, allDifferences), returnPage, destTableScript);
+                HtmlReportWriter.WriteBodyHtml(sourcePath, $"{sourceServer.name} Table", HtmlReportWriter.PrintTableInfo(schema, table, sourceInfo, allDifferences, sourceIndexes), returnPage, sourceTableScript);
+                HtmlReportWriter.WriteBodyHtml(destinationPath, $"{destinationServer.name} Table", HtmlReportWriter.PrintTableInfo(schema, table, destinationInfo, allDifferences, destIndexes), returnPage, destTableScript);
 
                 if (!isDestinationEmpty && !isTableEqual)
                 {
@@ -638,7 +647,9 @@ public class DbComparer : DbObjectHandler
                         $"{schema}.{table}",
                         returnPage,
                         sourceFKs,
-                        destFKs
+                        destFKs,
+                        sourceIndexes,
+                        destIndexes
                     );
                     isDifferencesVisible = true;
                 }
@@ -652,10 +663,10 @@ public class DbComparer : DbObjectHandler
 
             if (makeChange == ComparerAction.ApplyChanges && !isTableEqual)
             {
-                (_, destinationNewInfo, _, var destinationNewFKs) = TableFetcher.GetTableInfo(sourceServer.connectionString, destinationServer.connectionString, schema, table);
+                (_, destinationNewInfo, _, var destinationNewFKs, _, var destinationNewIndexes) = TableFetcher.GetTableInfo(sourceServer.connectionString, destinationServer.connectionString, schema, table);
                 string newPath = Path.Combine(schemaFolder, newFile);
-                var newTableScript = HtmlReportWriter.CreateTableScript(schema, table, destinationNewInfo, destFKs);
-                HtmlReportWriter.WriteBodyHtml(newPath, $"New {destinationServer.name} Table", HtmlReportWriter.PrintTableInfo(destinationNewInfo, null), returnPage, newTableScript);
+                var newTableScript = HtmlReportWriter.CreateTableScript(schema, table, destinationNewInfo, destinationNewFKs, destinationNewIndexes);
+                HtmlReportWriter.WriteBodyHtml(newPath, $"New {destinationServer.name} Table", HtmlReportWriter.PrintTableInfo(schema, table, destinationNewInfo, null, destinationNewIndexes), returnPage, newTableScript);
                 wasAltered = true;
             }
 
@@ -672,6 +683,8 @@ public class DbComparer : DbObjectHandler
                 DestinationTableInfo = destinationInfo,
                 SourceForeignKeys = sourceFKs,
                 DestinationForeignKeys = destFKs,
+                SourceIndexes = sourceIndexes,
+                DestinationIndexes = destIndexes,
                 SourceFile = isVisible ? Path.Combine(safeSchema, sourceFile) : null,
                 DestinationFile = isVisible ? Path.Combine(safeSchema, destinationFile) : null,
                 DifferencesFile = isDifferencesVisible ? Path.Combine(safeSchema, differencesFile) : null,

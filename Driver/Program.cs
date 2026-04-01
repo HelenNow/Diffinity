@@ -7,9 +7,10 @@ internal class Program
     {
         var Corewell = new DbServer("Corewell", Environment.GetEnvironmentVariable("connectionString"));
         var CMH = new DbServer("CMH", Environment.GetEnvironmentVariable("cmhCs"));
-        var DEV002 = new DbServer("DEV002", Environment.GetEnvironmentVariable("dev2Cs"));
+        var Albany = new DbServer("Albany", Environment.GetEnvironmentVariable("albanymedcs"));
+        var TGH = new DbServer("TGH", Environment.GetEnvironmentVariable("tghcs"));
 
-        string reportPath = DbComparer.CompareOneVsAll(Corewell,CMH,DEV002);
+        string reportPath = DbComparer.CompareOneVsAll(Corewell, TGH);
 
         Process.Start(new ProcessStartInfo(reportPath) { UseShellExecute = true });
 
