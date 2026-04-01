@@ -12,6 +12,9 @@ internal class Program
 
         string reportPath = DbComparer.CompareOneVsAll(Corewell, TGH);
 
+        //=== To show unchanged objects in the report ===
+        //string reportPath = DbComparer.CompareOneVsAll(Corewell, new[] { CMH, DEV002, alb }, filter: DbObjectFilter.ShowUnchanged);
+
         Process.Start(new ProcessStartInfo(reportPath) { UseShellExecute = true });
 
         #region Comparison of two databases
