@@ -28,11 +28,11 @@ public static class HtmlReportWriter
 <html lang=""en"">
 <head>
     <meta charset=""UTF-8"">
-    <title>Database Comparison Index</title>
+    <title>Diffinity Report</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 1000px;
+            max-width: 95%;
             margin: 40px auto;
             padding: 20px;
             background-color: #fff;
@@ -83,9 +83,9 @@ public static class HtmlReportWriter
 
         table.summary {
             width: 90%;
-            margin: 30px auto;
             border-collapse: collapse;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin: 30px auto;
         }
 
         table.summary th {
@@ -154,8 +154,8 @@ public static class HtmlReportWriter
     </style>
 </head>
 <body>
-    <img src=""images/diffinitylogo.png"" class=""logo"" alt=""Diffinity Logo"" />
-    <h1>Diffinity Report</h1>
+    {logo}
+    <h1>{title}</h1>
     <h5>{Date}</h5>
     <h5>{Duration}</h5>
     {connectionsTable}
@@ -169,7 +169,7 @@ public static class HtmlReportWriter
 <html lang=""en"">
 <head>
     <meta charset=""UTF-8"">
-    <title>{MetaData} Comparison Summary</title>
+    <title>Diffinity Report</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -416,7 +416,7 @@ public static class HtmlReportWriter
 <html lang=""en"">
 <head>
     <meta charset=""UTF-8"">
-    <title>Ignored Summary</title>
+    <titleDiffinity Report</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -537,7 +537,7 @@ public static class HtmlReportWriter
 <html lang=""en"">
 <head>
     <meta charset=""UTF-8"">
-    <title>{title}</title>
+    <title>Diffinity Report</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -689,7 +689,7 @@ public static class HtmlReportWriter
        <html>
        <head>
        <meta charset='utf-8' />
-       <title>{title}</title>
+       <title>Diffinity Report</title>
        <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -834,7 +834,7 @@ public static class HtmlReportWriter
         </head>
         <body>";
 
-    #region Index Report Writer
+    #region Index Report Writer (2dbs)
     /// <summary>
     /// Writes the main index summary HTML page linking to individual reports for procedures, views, and tables.
     /// </summary>
@@ -914,133 +914,57 @@ public static class HtmlReportWriter
 
             return (0, 0, 0, 0);
         }
-
         StringBuilder summaryTable = new StringBuilder();
         summaryTable.AppendLine(@"<table class=""summary"">");
         summaryTable.AppendLine(@"<caption style=""font-size: 1.2rem; font-weight: 600; color: #36454F; padding: 10px; text-align: center;"">Change Log</caption>");
         bool legendHasUnchanged = new[] { procsCountText, viewsCountText, tablesCountText, udtsCountText }
             .Any(t => !string.IsNullOrWhiteSpace(t) && t.Count(ch => ch == '/') == 3);
 
-        summaryTable.AppendLine(legendHasUnchanged
-            ? @"
+        int colspan = legendHasUnchanged ? 4 : 3;
+        summaryTable.AppendLine($@"
     <tr>
-        <th></th>
-        <th>New</th>
-        <th>Unchanged</th>
-        <th>Changed</th>
-        <th>Tenant-specific</th>
-    </tr>"
-            : @"
+        <th style=""text-align:left;""></th>
+        <th colspan=""{colspan}"" style=""text-align:center; border-right: 2px solid #bbb;"">{source.name}</th>
+        <th colspan=""{colspan}"" style=""text-align:center;"">{destination.name}</th>
+    </tr>
     <tr>
-        <th></th>
-        <th>New</th>
-        <th>Changed</th>
-        <th>Tenant-specific</th>
+        <th style=""text-align:left;""></th>
+        <th style=""text-align:center;"">New</th>
+        {(legendHasUnchanged ? @"<th style=""text-align:center;"">Unchanged</th>" : "")}
+        <th style=""text-align:center;"">Changed</th>
+        <th style=""text-align:center; border-right: 2px solid #bbb;"">Tenant-specific</th>
+        <th style=""text-align:center;"">New</th>
+        {(legendHasUnchanged ? @"<th style=""text-align:center;"">Unchanged</th>" : "")}
+        <th style=""text-align:center;"">Changed</th>
+        <th style=""text-align:center;"">Tenant-specific</th>
     </tr>");
 
-        if (udtCount > 0 && !string.IsNullOrWhiteSpace(udtIndexPath))
-        {
-            var (newC, unchangedC, changedC, tenantC) = ParseCounts(udtsCountText);
-            summaryTable.AppendLine(legendHasUnchanged
-                ? $@"
-    <tr>
-        <td id=""left""><a href=""{udtIndexPath}"">UDTs</a></td>
-        <td>{(newC > 0 ? $@"<a href=""{udtIndexPath}#new"">{newC}</a>" : "")}</td>
-        <td>{(unchangedC > 0 ? $@"<a href=""{udtIndexPath}#unchanged"">{unchangedC}</a>" : "")}</td>
-        <td>{(changedC > 0 ? $@"<a href=""{udtIndexPath}#changed"">{changedC}</a>" : "")}</td>
-        <td>{(tenantC > 0 ? $@"<a href=""{udtIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
-    </tr>"
-                : $@"
-    <tr>
-        <td id=""left""><a href=""{udtIndexPath}"">UDTs</a></td>
-        <td>{(newC > 0 ? $@"<a href=""{udtIndexPath}#new"">{newC}</a>" : "")}</td>
-        <td>{(changedC > 0 ? $@"<a href=""{udtIndexPath}#changed"">{changedC}</a>" : "")}</td>
-        <td>{(tenantC > 0 ? $@"<a href=""{udtIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
-    </tr>");
-        }
+        string Cell(int count, string href) =>
+            count > 0 ? $@"<a href=""{href}"">{count}</a>" : "";
 
-        if (tableCount > 0 && !string.IsNullOrWhiteSpace(tableIndexPath))
+        void AddRow(string label, string? indexPath, string? countText)
         {
-            var (newC, unchangedC, changedC, tenantC) = ParseCounts(tablesCountText);
-            summaryTable.AppendLine(legendHasUnchanged
-                ? $@"
+            if (string.IsNullOrWhiteSpace(indexPath)) return;
+            var (newC, unchangedC, changedC, tenantC) = ParseCounts(countText);
+            summaryTable.AppendLine($@"
     <tr>
-        <td id=""left""><a href=""{tableIndexPath}"">Tables</a></td>
-        <td>{(newC > 0 ? $@"<a href=""{tableIndexPath}#new"">{newC}</a>" : "")}</td>
-        <td>{(unchangedC > 0 ? $@"<a href=""{tableIndexPath}#unchanged"">{unchangedC}</a>" : "")}</td>
-        <td>{(changedC > 0 ? $@"<a href=""{tableIndexPath}#changed"">{changedC}</a>" : "")}</td>
-        <td>{(tenantC > 0 ? $@"<a href=""{tableIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
-    </tr>"
-                : $@"
-    <tr>
-        <td id=""left""><a href=""{tableIndexPath}"">Tables</a></td>
-        <td>{(newC > 0 ? $@"<a href=""{tableIndexPath}#new"">{newC}</a>" : "")}</td>
-        <td>{(changedC > 0 ? $@"<a href=""{tableIndexPath}#changed"">{changedC}</a>" : "")}</td>
-        <td>{(tenantC > 0 ? $@"<a href=""{tableIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
+        <td id=""left""><a href=""{indexPath}"">{label}</a></td>
+        <td style=""text-align:center;"">{Cell(newC, indexPath + "#new")}</td>
+        {(legendHasUnchanged ? $@"<td style=""text-align:center;"">{Cell(unchangedC, indexPath + "#unchanged")}</td>" : "")}
+        <td style=""text-align:center;"">{Cell(changedC, indexPath + "#changed")}</td>
+        <td style=""text-align:center; border-right: 2px solid #bbb;"">{Cell(tenantC, indexPath + "#tenant")}</td>
+        <td style=""text-align:center;"">{Cell(newC, indexPath + "#new")}</td>
+        {(legendHasUnchanged ? $@"<td style=""text-align:center;"">{Cell(unchangedC, indexPath + "#unchanged")}</td>" : "")}
+        <td style=""text-align:center;"">{Cell(changedC, indexPath + "#changed")}</td>
+        <td style=""text-align:center;"">{Cell(tenantC, indexPath + "#tenant")}</td>
     </tr>");
         }
 
-        if (viewCount > 0 && !string.IsNullOrWhiteSpace(viewIndexPath))
-        {
-            var (newC, unchangedC, changedC, tenantC) = ParseCounts(viewsCountText);
-            summaryTable.AppendLine(legendHasUnchanged
-                ? $@"
-    <tr>
-        <td id=""left""><a href=""{viewIndexPath}"">Views</a></td>
-        <td>{(newC > 0 ? $@"<a href=""{viewIndexPath}#new"">{newC}</a>" : "")}</td>
-        <td>{(unchangedC > 0 ? $@"<a href=""{viewIndexPath}#unchanged"">{unchangedC}</a>" : "")}</td>
-        <td>{(changedC > 0 ? $@"<a href=""{viewIndexPath}#changed"">{changedC}</a>" : "")}</td>
-        <td>{(tenantC > 0 ? $@"<a href=""{viewIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
-    </tr>"
-                : $@"
-    <tr>
-        <td id=""left""><a href=""{viewIndexPath}"">Views</a></td>
-        <td>{(newC > 0 ? $@"<a href=""{viewIndexPath}#new"">{newC}</a>" : "")}</td>
-        <td>{(changedC > 0 ? $@"<a href=""{viewIndexPath}#changed"">{changedC}</a>" : "")}</td>
-        <td>{(tenantC > 0 ? $@"<a href=""{viewIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
-    </tr>");
-        }
-
-        if (procCount > 0 && !string.IsNullOrWhiteSpace(procIndexPath))
-        {
-            var (newC, unchangedC, changedC, tenantC) = ParseCounts(procsCountText);
-            summaryTable.AppendLine(legendHasUnchanged
-                ? $@"
-    <tr>
-        <td id=""left""><a href=""{procIndexPath}"">Procedures</a></td>
-        <td>{(newC > 0 ? $@"<a href=""{procIndexPath}#new"">{newC}</a>" : "")}</td>
-        <td>{(unchangedC > 0 ? $@"<a href=""{procIndexPath}#unchanged"">{unchangedC}</a>" : "")}</td>
-        <td>{(changedC > 0 ? $@"<a href=""{procIndexPath}#changed"">{changedC}</a>" : "")}</td>
-        <td>{(tenantC > 0 ? $@"<a href=""{procIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
-    </tr>"
-                : $@"
-    <tr>
-        <td id=""left""><a href=""{procIndexPath}"">Procedures</a></td>
-        <td>{(newC > 0 ? $@"<a href=""{procIndexPath}#new"">{newC}</a>" : "")}</td>
-        <td>{(changedC > 0 ? $@"<a href=""{procIndexPath}#changed"">{changedC}</a>" : "")}</td>
-        <td>{(tenantC > 0 ? $@"<a href=""{procIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
-    </tr>");
-        }
-        if (functionCount > 0 && !string.IsNullOrWhiteSpace(functionIndexPath))
-        {
-            var (newC, unchangedC, changedC, tenantC) = ParseCounts(functionsCountText);
-            summaryTable.AppendLine(legendHasUnchanged
-                ? $@"
-    <tr>
-        <td id=""left""><a href=""{functionIndexPath}"">Functions</a></td>
-        <td>{(newC > 0 ? $@"<a href=""{functionIndexPath}#new"">{newC}</a>" : "")}</td>
-        <td>{(unchangedC > 0 ? $@"<a href=""{functionIndexPath}#unchanged"">{unchangedC}</a>" : "")}</td>
-        <td>{(changedC > 0 ? $@"<a href=""{functionIndexPath}#changed"">{changedC}</a>" : "")}</td>
-        <td>{(tenantC > 0 ? $@"<a href=""{functionIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
-    </tr>"
-                : $@"
-    <tr>
-        <td id=""left""><a href=""{functionIndexPath}"">Functions</a></td>
-        <td>{(newC > 0 ? $@"<a href=""{functionIndexPath}#new"">{newC}</a>" : "")}</td>
-        <td>{(changedC > 0 ? $@"<a href=""{functionIndexPath}#changed"">{changedC}</a>" : "")}</td>
-        <td>{(tenantC > 0 ? $@"<a href=""{functionIndexPath}#tenant"">{tenantC}</a>" : "")}</td>
-    </tr>");
-        }
+        if (udtCount > 0) AddRow("UDTs", udtIndexPath, udtsCountText);
+        if (tableCount > 0) AddRow("Tables", tableIndexPath, tablesCountText);
+        if (viewCount > 0) AddRow("Views", viewIndexPath, viewsCountText);
+        if (procCount > 0) AddRow("Procedures", procIndexPath, procsCountText);
+        if (functionCount > 0) AddRow("Functions", functionIndexPath, functionsCountText);
 
         summaryTable.AppendLine("</table>");
 
@@ -1050,16 +974,152 @@ public static class HtmlReportWriter
 
         html.Append(
             IndexTemplate
+              .Replace("{logo}", @"<img src=""images/diffinitylogo.png"" class=""logo"" alt=""Diffinity Logo"" />")
+              .Replace("{title}", $"Diffinity Report<br><h2 style=\"color:#36454F;text-align:center;margin-top:4px\">{source.name} vs {destination.name}</h2>")
               .Replace("{connectionsTable}", connectionsTable)
               .Replace("{summaryTable}", summaryTable.ToString())
               .Replace("{ignoredIndex}", ignoredIndex)
               .Replace("{Date}", Date)
               .Replace("{Duration}", formattedDuration)
         );
-        string indexPath = Path.Combine(outputPath, "index.html");
-
-        // Write to index.html
+        string indexPath = Path.Combine(outputPath, $"{source.name}_{destination.name}.html");
         File.WriteAllText(indexPath, html.ToString());
+        return indexPath;
+    }
+    #endregion
+
+    #region Index Report Writer (set of dbs)
+    public static string WriteMultiDestinationIndexSummary(
+        DbServer source,
+        List<DbServer> destinations,
+        string outputPath,
+        long Duration,
+        List<DestinationReportData> destinationReports,
+        string? ignoredIndexPath = null)
+    {
+        string sourceImagesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "HtmlHelper", "images");
+        string destImagesPath = Path.Combine(outputPath, "images");
+        if (Directory.Exists(sourceImagesPath))
+        {
+            Directory.CreateDirectory(destImagesPath);
+            foreach (string file in Directory.GetFiles(sourceImagesPath))
+                File.Copy(file, Path.Combine(destImagesPath, Path.GetFileName(file)), true);
+        }
+
+        DateTime date = DateTime.Now;
+        string Date = date.ToString("MM/dd/yyyy hh:mm tt");
+        TimeSpan ts = TimeSpan.FromMilliseconds(Duration);
+        string formattedDuration = ts.TotalMinutes >= 1 ? $"{ts.TotalMinutes:F1} minutes" : $"{ts.TotalSeconds:F0} seconds";
+
+        string destNames = string.Join(", ", destinations.Select(d => d.name));
+        string title = $"Diffinity Report<br><h2 style=\"color:#36454F;text-align:center;margin-top:4px\">{source.name} vs {destNames}</h2>";
+
+        // Connections table
+        var sourceBuilder = new SqlConnectionStringBuilder(source.connectionString);
+        StringBuilder connectionsTable = new StringBuilder();
+        connectionsTable.AppendLine(@"<table class=""conn""><tr><th>Connection</th><th>Server</th><th>Database</th></tr>");
+        connectionsTable.AppendLine($"<tr><td>{source.name}</td><td>{sourceBuilder.DataSource}</td><td>{sourceBuilder.InitialCatalog}</td></tr>");
+        foreach (var dest in destinations)
+        {
+            var db = new SqlConnectionStringBuilder(dest.connectionString);
+            connectionsTable.AppendLine($"<tr><td>{dest.name}</td><td>{db.DataSource}</td><td>{db.InitialCatalog}</td></tr>");
+        }
+        connectionsTable.AppendLine("</table>");
+
+        // Check if any destination has unchanged counts
+        bool legendHasUnchanged = destinationReports
+            .SelectMany(d => new[] { d.ProcsCountText, d.ViewsCountText, d.TablesCountText, d.UdtsCountText })
+            .Any(t => !string.IsNullOrWhiteSpace(t) && t.Count(ch => ch == '/') == 3);
+
+        int colspan = legendHasUnchanged ? 4 : 3;
+
+        // Build summary table
+        StringBuilder summaryTable = new StringBuilder();
+        summaryTable.AppendLine(@"<table class=""summary"">");
+        summaryTable.AppendLine(@"<caption style=""font-size: 1.2rem; font-weight: 600; color: #36454F; padding: 10px; text-align: center;"">Change Log</caption>");
+
+        // Header row 1 — destination names
+        summaryTable.Append(@"<tr><th style=""text-align:left;""></th>");
+        for (int i = 0; i < destinations.Count; i++)
+        {
+            string borderStyle = i < destinations.Count - 1 ? "border-right: 2px solid #bbb;" : "";
+            summaryTable.Append($@"<th colspan=""{colspan}"" style=""text-align:center; {borderStyle}"">{source.name} vs {destinations[i].name}</th>");
+        }
+        summaryTable.AppendLine("</tr>");
+
+        // Header row 2 — New / (Unchanged) / Changed / Tenant-specific repeated per destination
+        summaryTable.Append(@"<tr><th style=""text-align:left;""></th>");
+        for (int i = 0; i < destinations.Count; i++)
+        {
+            string borderStyle = i < destinations.Count - 1 ? "border-right: 2px solid #bbb;" : "";
+            summaryTable.Append(@"<th style=""text-align:center;"">New</th>");
+            if (legendHasUnchanged)
+                summaryTable.Append(@"<th style=""text-align:center;"">Unchanged</th>");
+            summaryTable.Append(@"<th style=""text-align:center;"">Changed</th>");
+            summaryTable.Append($@"<th style=""text-align:center; {borderStyle}"">Tenant-specific</th>");
+        }
+        summaryTable.AppendLine("</tr>");
+
+        string Cell(int count, string href) =>
+            count > 0 ? $@"<a href=""{href}"">{count}</a>" : "";
+
+        (int newC, int unchangedC, int changedC, int tenantC) ParseCounts(string countText)
+        {
+            if (string.IsNullOrWhiteSpace(countText)) return (0, 0, 0, 0);
+            countText = countText.Trim('(', ')');
+            var parts = countText.Split('/');
+            if (parts.Length == 4)
+                return (int.TryParse(parts[0], out int n) ? n : 0, int.TryParse(parts[1], out int u) ? u : 0, int.TryParse(parts[2], out int c) ? c : 0, int.TryParse(parts[3], out int t) ? t : 0);
+            else if (parts.Length == 3)
+                return (int.TryParse(parts[0], out int n) ? n : 0, 0, int.TryParse(parts[1], out int c) ? c : 0, int.TryParse(parts[2], out int t) ? t : 0);
+            return (0, 0, 0, 0);
+        }
+
+        // Data rows — one per object type
+        var objectTypes = new (string Label, Func<DestinationReportData, (int Count, string? Path, string? CountText)> Getter)[]
+                {
+            ("UDTs",       d => (d.UdtCount,      d.UdtIndexPath,      d.UdtsCountText)),
+            ("Tables",     d => (d.TableCount,     d.TableIndexPath,    d.TablesCountText)),
+            ("Views",      d => (d.ViewCount,      d.ViewIndexPath,     d.ViewsCountText)),
+            ("Procedures", d => (d.ProcCount,      d.ProcIndexPath,     d.ProcsCountText)),
+            ("Functions",  d => (d.FunctionCount,  d.FunctionIndexPath, d.FunctionsCountText)),
+                };
+
+        foreach (var (label, getter) in objectTypes)
+        {
+            bool anyHasData = destinationReports.Any(d => { var (count, path, _) = getter(d); return count > 0 && !string.IsNullOrWhiteSpace(path); });
+            if (!anyHasData) continue;
+
+            summaryTable.Append($@"<tr><td id=""left"">{label}</td>");
+            for (int i = 0; i < destinationReports.Count; i++)
+            {
+                var (count, objIndexPath, countText) = getter(destinationReports[i]);
+                string borderStyle = i < destinationReports.Count - 1 ? "border-right: 2px solid #bbb;" : "";
+                var (newC, unchangedC, changedC, tenantC) = ParseCounts(countText);
+                summaryTable.Append($@"<td style=""text-align:center;"">{Cell(newC, $"{objIndexPath}#new")}</td>");
+                if (legendHasUnchanged)
+                    summaryTable.Append($@"<td style=""text-align:center;"">{Cell(unchangedC, $"{objIndexPath}#unchanged")}</td>");
+                summaryTable.Append($@"<td style=""text-align:center;"">{Cell(changedC, $"{objIndexPath}#changed")}</td>");
+                summaryTable.Append($@"<td style=""text-align:center; {borderStyle}"">{Cell(tenantC, $"{objIndexPath}#tenant")}</td>");
+            }
+            summaryTable.AppendLine("</tr>");
+        }
+
+        summaryTable.AppendLine("</table>");
+
+        string ignoredIndex = string.IsNullOrWhiteSpace(ignoredIndexPath) ? "" : $@"<a href=""{ignoredIndexPath}"" class=""btn"">Ignored</a>";
+
+        string html = IndexTemplate
+            .Replace("{logo}", @"<img src=""images/diffinitylogo.png"" class=""logo"" alt=""Diffinity Logo"" />")
+            .Replace("{title}", title)
+            .Replace("{connectionsTable}", connectionsTable.ToString())
+            .Replace("{summaryTable}", summaryTable.ToString())
+            .Replace("{ignoredIndex}", ignoredIndex)
+            .Replace("{Date}", Date)
+            .Replace("{Duration}", formattedDuration);
+
+        string indexPath = Path.Combine(outputPath, $"{source.name}_vs_all.html");
+        File.WriteAllText(indexPath, html);
         return indexPath;
     }
     #endregion
@@ -1068,7 +1128,7 @@ public static class HtmlReportWriter
     /// <summary>
     /// Writes a detailed summary report comparing objects (procedures, views, tables) between source and destination.
     /// </summary>
-    public static (string html, string countObjects) WriteSummaryReport(DbServer sourceServer, DbServer destinationServer, string summaryPath, List<dbObjectResult> results, DbObjectFilter filter, Run run, bool isIgnoredEmpty, string ignoredCount, Dictionary<string, string> tagColors)
+    public static (string html, string countObjects) WriteSummaryReport(DbServer sourceServer, DbServer destinationServer, string summaryPath, List<dbObjectResult> results, DbObjectFilter filter, Run run, bool isIgnoredEmpty, string ignoredCount, Dictionary<string, string> tagColors, string? overrideReturnPage = null)
     {
         if (results == null || results.Count == 0)
         {
@@ -1079,7 +1139,7 @@ public static class HtmlReportWriter
         results = results.OrderBy(r => r.schema).ThenBy(r => r.Name).ToList();
         StringBuilder html = new();
         var result = results[0];
-        string returnPage = Path.Combine("..", "index.html");
+        string returnPage = overrideReturnPage ?? $"../{sourceServer.name}_{destinationServer.name}.html";
         html.Append(ComparisonTemplate.Replace("{source}", sourceServer.name).Replace("{destination}", destinationServer.name).Replace("{MetaData}", result.Type).Replace("{nav}", BuildNav(run, isIgnoredEmpty, ignoredCount)).Replace("{selectAllSrc}", "chk-src-all").Replace("{selectAllDst}", "chk-dst-all"));
         html.AppendLine(@"
         <script>
@@ -1170,7 +1230,7 @@ public static class HtmlReportWriter
             {
 
                 string copyPayload = item.Type == "Table"
-                    ? CreateTableScript(item.schema, item.Name, item.SourceTableInfo, item.SourceForeignKeys)
+                    ? CreateTableScript(item.schema, item.Name, item.SourceTableInfo, item.SourceForeignKeys, item.SourceIndexes)
                     : item.SourceBody;
 
                 string sourceLink = $@"<a href=""{item.SourceFile}"">View</a>";
@@ -1289,7 +1349,7 @@ public static class HtmlReportWriter
             foreach (var item in unchangedObjects)
             {
                 string copyPayload = item.Type == "Table"
-                    ? CreateTableScript(item.schema, item.Name, item.SourceTableInfo, item.SourceForeignKeys)
+                    ? CreateTableScript(item.schema, item.Name, item.SourceTableInfo, item.SourceForeignKeys, item.SourceIndexes)
                     : item.SourceBody;
 
                 string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyName(this)"" data-key=""name-copied|{item.schema}.{item.Name}"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
@@ -1379,10 +1439,10 @@ public static class HtmlReportWriter
             if (item.Type == "Table")
             {
                 // Source copy button gets script to alter the SOURCE table (make it match destination)
-                sourceCopy = CreateAlterTableScript(item.schema, item.Name, item.SourceTableInfo, item.DestinationTableInfo, item.SourceForeignKeys, item.DestinationForeignKeys);
+                sourceCopy = CreateAlterTableScript(item.schema, item.Name, item.SourceTableInfo, item.DestinationTableInfo, item.SourceForeignKeys, item.DestinationForeignKeys, item.SourceIndexes, item.DestinationIndexes);
 
                 // Destination copy button gets script to alter the DESTINATION table (make it match source)
-                destCopy = CreateAlterTableScript(item.schema, item.Name, item.DestinationTableInfo, item.SourceTableInfo, item.DestinationForeignKeys, item.SourceForeignKeys);
+                destCopy = CreateAlterTableScript(item.schema, item.Name, item.DestinationTableInfo, item.SourceTableInfo, item.DestinationForeignKeys, item.SourceForeignKeys, item.DestinationIndexes, item.SourceIndexes);
             }
 
             // Prepare file links
@@ -1539,8 +1599,8 @@ public static class HtmlReportWriter
 
                 if (item.Type == "Table")
                 {
-                    sourceCopy = CreateAlterTableScript(item.schema, item.Name, item.DestinationTableInfo, item.SourceTableInfo, item.DestinationForeignKeys, item.SourceForeignKeys);
-                    destCopy = CreateAlterTableScript(item.schema, item.Name, item.SourceTableInfo, item.DestinationTableInfo, item.SourceForeignKeys, item.DestinationForeignKeys);
+                    sourceCopy = CreateAlterTableScript(item.schema, item.Name, item.DestinationTableInfo, item.SourceTableInfo, item.DestinationForeignKeys, item.SourceForeignKeys, item.DestinationIndexes, item.SourceIndexes);
+                    destCopy = CreateAlterTableScript(item.schema, item.Name, item.SourceTableInfo, item.DestinationTableInfo, item.SourceForeignKeys, item.DestinationForeignKeys, item.SourceIndexes, item.DestinationIndexes);
                 }
 
                 string copyNameButton = $@"<button class=""name-copy-btn"" onclick=""copyName(this)"" data-key=""name-copied|{item.schema}.{item.Name}"">{SmallCopyIcon}{SmallCheckIcon}</button><span class=""copy-target"" style=""display:none;"">{item.schema}.{item.Name}</span>";
@@ -1660,7 +1720,7 @@ public static class HtmlReportWriter
     #endregion
 
     #region Ignored Report Writer
-    public static DbComparer.summaryReportDto WriteIgnoredReport(string outputFolder, HashSet<string> ignoredObjects, Run run)
+    public static DbComparer.summaryReportDto WriteIgnoredReport(string outputFolder, HashSet<string> ignoredObjects, Run run, DbServer source, DbServer destination, string? overrideReturnPage = null)
     {
         #region 1- Setup folder structure for reports
         Directory.CreateDirectory(outputFolder);
@@ -1669,7 +1729,7 @@ public static class HtmlReportWriter
         #endregion
 
         StringBuilder html = new();
-        string returnPage = Path.Combine("..", "index.html");
+        string returnPage = overrideReturnPage ?? $"../{source.name}_{destination.name}.html";
         string ignoredCount = ignoredObjects.Count().ToString();
         html.Append(IgnoredTemplate.Replace("{nav}", BuildNav(run, false, ignoredCount)));
 
@@ -1879,7 +1939,7 @@ public static class HtmlReportWriter
     /// <summary>
     /// Prints table column details with to show the differences 
     /// </summary>
-    public static void TableDifferencesWriter(string filePath, string sourceName, string destinationName,List<tableDto> sourceTable, List<tableDto> destinationTable, List<string> differences,string title, string objectName, string returnPage,List<ForeignKeyDto> sourceFKs = null, List<ForeignKeyDto> destFKs = null)
+    public static void TableDifferencesWriter(string filePath, string sourceName, string destinationName,List<tableDto> sourceTable, List<tableDto> destinationTable, List<string> differences,string title, string objectName, string returnPage,List<ForeignKeyDto> sourceFKs = null, List<ForeignKeyDto> destFKs = null, List<IndexDto> sourceIndexes = null, List<IndexDto> destIndexes = null)
     {
         var html = new StringBuilder();
         html.AppendLine(BodyTemplate.Replace("{title}", title));
@@ -1889,8 +1949,8 @@ public static class HtmlReportWriter
         string schema = parts.Length > 1 ? parts[0] : "dbo";
         string table = parts.Length > 1 ? parts[1] : objectName;
 
-        string sourceAlterScript = CreateAlterTableScript(schema, table, sourceTable, destinationTable, sourceFKs, destFKs);
-        string destAlterScript = CreateAlterTableScript(schema, table, destinationTable, sourceTable, destFKs, sourceFKs);
+        string sourceAlterScript = CreateAlterTableScript(schema, table, sourceTable, destinationTable, sourceFKs, destFKs, sourceIndexes, destIndexes);
+        string destAlterScript = CreateAlterTableScript(schema, table, destinationTable, sourceTable, destFKs, sourceFKs, destIndexes, sourceIndexes);
 
         html.AppendLine($@"
     <body>
@@ -2083,8 +2143,12 @@ public static class HtmlReportWriter
             rowNum++;
         }
 
-        html.AppendLine("</table></div></div>");
-        destTableHtml.AppendLine("</table></div></div>");
+        html.AppendLine("</table>");
+        html.AppendLine(PrintIndexTable(schema, table, sourceIndexes, differences, destIndexes, isSourceSide: true, copyIdPrefix: "src-idx"));
+        html.AppendLine("</div></div>");
+        destTableHtml.AppendLine("</table>");
+        destTableHtml.AppendLine(PrintIndexTable(schema, table, destIndexes, differences, sourceIndexes, isSourceSide: false, copyIdPrefix: "dst-idx"));
+        destTableHtml.AppendLine("</div></div>");
         html.AppendLine(destTableHtml.ToString());
 
         // Hidden spans containing the full table ALTER scripts
@@ -2233,7 +2297,7 @@ public static class HtmlReportWriter
 
         return "";
     }
-    public static string CreateTableScript(string schema, string table, List<tableDto> cols, List<ForeignKeyDto> foreignKeys = null)
+    public static string CreateTableScript(string schema, string table, List<tableDto> cols, List<ForeignKeyDto> foreignKeys = null, List<IndexDto> indexes = null)
     {
         if (cols == null || cols.Count == 0)
             return $"-- Table [{schema}].[{table}] has no columns?";
@@ -2278,10 +2342,20 @@ public static class HtmlReportWriter
         }
 
         sb.AppendLine(");");
+
+        if (indexes != null && indexes.Any())
+        {
+            sb.AppendLine();
+            foreach (var index in indexes)
+            {
+                sb.AppendLine(BuildCreateIndexStatement(schema, table, index));
+            }
+        }
+
         return sb.ToString();
     }
 
-    public static string CreateAlterTableScript(string schema, string table, List<tableDto> sourceColumns, List<tableDto> targetColumns, List<ForeignKeyDto> sourceFKs = null, List<ForeignKeyDto> targetFKs = null)
+    public static string CreateAlterTableScript(string schema, string table, List<tableDto> sourceColumns, List<tableDto> targetColumns, List<ForeignKeyDto> sourceFKs = null, List<ForeignKeyDto> targetFKs = null, List<IndexDto> sourceIndexes = null, List<IndexDto> targetIndexes = null)
     {
         if (sourceColumns == null || targetColumns == null)
             return $"-- Cannot generate ALTER script for [{schema}].[{table}]";
@@ -2502,6 +2576,49 @@ public static class HtmlReportWriter
 
         if (fksToAdd.Any())
             sb.AppendLine();
+
+        var sourceIndexMap = (sourceIndexes ?? new List<IndexDto>()).ToDictionary(i => i.IndexName, StringComparer.OrdinalIgnoreCase);
+        var targetIndexMap = (targetIndexes ?? new List<IndexDto>()).ToDictionary(i => i.IndexName, StringComparer.OrdinalIgnoreCase);
+        var indexesToDrop = new List<string>();
+        var indexesToAdd = new List<IndexDto>();
+
+        foreach (var sourceIndex in sourceIndexMap)
+        {
+            if (!targetIndexMap.TryGetValue(sourceIndex.Key, out var targetIndex) || !TableIndexComparer.AreDefinitionsEqual(sourceIndex.Value, targetIndex))
+            {
+                indexesToDrop.Add(sourceIndex.Key);
+            }
+        }
+
+        foreach (var targetIndex in targetIndexMap)
+        {
+            if (!sourceIndexMap.TryGetValue(targetIndex.Key, out var sourceIndex) || !TableIndexComparer.AreDefinitionsEqual(sourceIndex, targetIndex.Value))
+            {
+                indexesToAdd.Add(targetIndex.Value);
+            }
+        }
+
+        foreach (var indexName in indexesToDrop)
+        {
+            sb.AppendLine($"DROP INDEX [{indexName}] ON [{schema}].[{table}];");
+            hasChanges = true;
+        }
+
+        if (indexesToDrop.Any())
+        {
+            sb.AppendLine();
+        }
+
+        foreach (var index in indexesToAdd)
+        {
+            sb.AppendLine(BuildCreateIndexStatement(schema, table, index));
+            hasChanges = true;
+        }
+
+        if (indexesToAdd.Any())
+        {
+            sb.AppendLine();
+        }
 
         if (!hasChanges)
         {
@@ -2759,8 +2876,9 @@ public static class HtmlReportWriter
     /// <summary>
     /// Prints table column details with optional difference highlighting.
     /// </summary>
-    public static string PrintTableInfo(List<tableDto> tableInfo, List<string>? differences)
+    public static string PrintTableInfo(string schema, string table, List<tableDto> tableInfo, List<string>? differences, List<IndexDto>? indexes = null)
     {
+        differences ??= new List<string>();
         StringBuilder sb = new StringBuilder();
         sb.AppendLine(@"<table border='1'>
        <tr>
@@ -2820,8 +2938,82 @@ public static class HtmlReportWriter
         }
 
         sb.AppendLine("</table>");
+        sb.AppendLine(PrintIndexTable(schema, table, indexes, differences, null, isSourceSide: true, copyIdPrefix: "idx"));
         return sb.ToString();
 
+    }
+
+    private static string PrintIndexTable(string schema, string table, List<IndexDto>? indexes, List<string>? differences, List<IndexDto>? comparisonIndexes, bool isSourceSide, string copyIdPrefix)
+    {
+        if (indexes == null || !indexes.Any())
+        {
+            return "<h3>Indexes</h3><p>No non-primary-key indexes found.</p>";
+        }
+
+        differences ??= new List<string>();
+        comparisonIndexes ??= new List<IndexDto>();
+        var comparisonMap = comparisonIndexes.ToDictionary(i => i.IndexName, StringComparer.OrdinalIgnoreCase);
+        var sb = new StringBuilder();
+        sb.AppendLine(@"<h3>Indexes</h3>");
+        sb.AppendLine(@"<table border='1'>
+       <tr>
+       <th style='width:10px; padding:0;'></th>
+       <th>Index Name</th>
+       <th>Type</th>
+       <th>Unique</th>
+       <th>Unique Constraint</th>
+       <th>Key Columns</th>
+       <th>Included Columns</th>
+       <th>Filter</th>
+       </tr>");
+
+        int rowNum = 0;
+        foreach (var index in indexes)
+        {
+            string marker = TableIndexComparer.ToMarker(index.IndexName);
+            string rowClass = "";
+            if (comparisonMap.TryGetValue(index.IndexName, out var comparisonIndex))
+            {
+                if (!TableIndexComparer.AreDefinitionsEqual(index, comparisonIndex))
+                {
+                    rowClass = @" class=""difference""";
+                }
+            }
+            else if (differences.Contains(marker))
+            {
+                rowClass = isSourceSide ? @" class=""source""" : @" class=""destination""";
+            }
+
+            string copyId = $"{copyIdPrefix}-{rowNum}";
+            string copyBtn = $@"<button class='copy-btn-small' onclick='copyColumnScript(""{copyId}"")'>{CopyIcon}{CheckIcon}</button>
+                <span id='{copyId}' style='display:none;'>{BuildCreateIndexStatement(schema, table, index)}</span>";
+
+            sb.AppendLine($@"<tr{rowClass}>
+            <td style='text-align:center; width:10px;padding:0;'>{copyBtn}</td>
+            <td>{index.IndexName}</td>
+            <td>{index.IndexType}</td>
+            <td>{(index.IsUnique ? "YES" : "")}</td>
+            <td>{(index.IsUniqueConstraint ? "YES" : "")}</td>
+            <td>{index.KeyColumns}</td>
+            <td>{index.IncludedColumns}</td>
+            <td>{index.FilterDefinition}</td>
+            </tr>");
+            rowNum++;
+        }
+
+        sb.AppendLine("</table>");
+        return sb.ToString();
+    }
+
+    private static string BuildCreateIndexStatement(string schema, string table, IndexDto index)
+    {
+        var unique = index.IsUnique ? "UNIQUE " : "";
+        var clustered = string.Equals(index.IndexType, "CLUSTERED", StringComparison.OrdinalIgnoreCase) ? "CLUSTERED " :
+            string.Equals(index.IndexType, "NONCLUSTERED", StringComparison.OrdinalIgnoreCase) ? "NONCLUSTERED " : "";
+        var includeClause = string.IsNullOrWhiteSpace(index.IncludedColumns) ? "" : $" INCLUDE ({index.IncludedColumns})";
+        var filterClause = string.IsNullOrWhiteSpace(index.FilterDefinition) ? "" : $" WHERE {index.FilterDefinition}";
+
+        return $"CREATE {unique}{clustered}INDEX [{index.IndexName}] ON [{schema}].[{table}] ({index.KeyColumns}){includeClause}{filterClause};";
     }
     private static string GetTextColor(string backgroundColor)
     {
@@ -2860,6 +3052,25 @@ public static class HtmlReportWriter
         {
             return "#000000";
         }
+    }
+
+    public class DestinationReportData
+    {
+        public string? ProcIndexPath { get; set; }
+        public string? ViewIndexPath { get; set; }
+        public string? TableIndexPath { get; set; }
+        public string? UdtIndexPath { get; set; }
+        public string? FunctionIndexPath { get; set; }
+        public int ProcCount { get; set; }
+        public int ViewCount { get; set; }
+        public int TableCount { get; set; }
+        public int UdtCount { get; set; }
+        public int FunctionCount { get; set; }
+        public string? ProcsCountText { get; set; }
+        public string? ViewsCountText { get; set; }
+        public string? TablesCountText { get; set; }
+        public string? UdtsCountText { get; set; }
+        public string? FunctionsCountText { get; set; }
     }
     #endregion
 

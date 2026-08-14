@@ -52,13 +52,17 @@ public class DbComparer : DbObjectHandler
         /// <summary>
         /// Executes comparison of database object types based on the specified Run option and returns the corresponding summary report.
         /// </summary>
-        if (outputFolder == null) { outputFolder = _outputFolder; }
+        if (outputFolder == null)
+        {
+            string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+            outputFolder = $"{sourceServer.name}_{destinationServer.name}_{timestamp}";
+        }
         if (logger == null) { logger = Log.Logger; }
 
         var ignoredObjects = DiffIgnoreLoader.LoadIgnoredObjects();
         var objectTags = DiffTagsLoader.LoadObjectTags();
         var tagColors = DiffTagColorsLoader.LoadTagColors();
-        summaryReportDto ignoredReport = !ignoredObjects.Any() ? new summaryReportDto() : HtmlReportWriter.WriteIgnoredReport(outputFolder, ignoredObjects, run.Value);
+        summaryReportDto ignoredReport = !ignoredObjects.Any() ? new summaryReportDto() : HtmlReportWriter.WriteIgnoredReport(outputFolder, ignoredObjects, run.Value, sourceServer, destinationServer);
         summaryReportDto ProcReport;
         summaryReportDto ViewReport;
         summaryReportDto TableReport;
@@ -168,7 +172,102 @@ public class DbComparer : DbObjectHandler
         }
 
     }
-    public static summaryReportDto CompareProcs(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, int threadCount)
+    /// <summary>
+    /// One-vs-All: compares sourceServer against every server in targetServers.
+    /// Each pair gets its own sub-folder. A combined index.html is written at the root.
+    /// </summary>
+    public static string CompareOneVsAll(DbServer sourceServer, params DbServer[] targetServers)
+    {
+        return CompareOneVsAll(sourceServer, targetServers, 4, ComparerAction.DoNotApplyChanges, DbObjectFilter.HideUnchanged, Run.All);
+    }
+    public static string CompareOneVsAll(DbServer sourceServer, DbServer[] targetServers, int threadCount = 4, ComparerAction makeChange = ComparerAction.DoNotApplyChanges, DbObjectFilter filter = DbObjectFilter.HideUnchanged, Run run = Run.All)
+    {
+        var sw = Stopwatch.StartNew();
+        string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+        string rootFolder = $"{sourceServer.name}_vs_all_{timestamp}";
+        Directory.CreateDirectory(rootFolder);
+
+        var ignoredObjects = DiffIgnoreLoader.LoadIgnoredObjects();
+        var objectTags = DiffTagsLoader.LoadObjectTags();
+        var tagColors = DiffTagColorsLoader.LoadTagColors();
+
+        summaryReportDto ignoredReport = !ignoredObjects.Any()
+            ? new summaryReportDto()
+            : HtmlReportWriter.WriteIgnoredReport(rootFolder, ignoredObjects, run, sourceServer, targetServers[0], $"../{sourceServer.name}_vs_all.html");
+
+        var destinationReports = new List<HtmlReportWriter.DestinationReportData>();
+        var allReports = new List<(summaryReportDto proc, summaryReportDto view, summaryReportDto table, summaryReportDto udt, summaryReportDto function, DbServer dest)>();
+
+        foreach (var target in targetServers)
+        {
+            string subFolder = Path.Combine(rootFolder, target.name);
+            Directory.CreateDirectory(subFolder);
+
+            string multiReturnPage = $"../../{sourceServer.name}_vs_all.html";
+            var procReport = CompareProcs(sourceServer, target, subFolder, makeChange, filter, run, ignoredObjects, objectTags, tagColors, threadCount, multiReturnPage);
+            var viewReport = CompareViews(sourceServer, target, subFolder, makeChange, filter, run, ignoredObjects, objectTags, tagColors, threadCount, multiReturnPage);
+            var tableReport = CompareTables(sourceServer, target, subFolder, makeChange, filter, run, ignoredObjects, objectTags, tagColors, threadCount, multiReturnPage);
+            var udtReport = CompareUdts(sourceServer, target, subFolder, makeChange, filter, run, ignoredObjects, objectTags, tagColors, threadCount, multiReturnPage);
+            var functionReport = CompareFunctions(sourceServer, target, subFolder, makeChange, filter, run, ignoredObjects, objectTags, tagColors, threadCount, multiReturnPage);
+
+            allReports.Add((procReport, viewReport, tableReport, udtReport, functionReport, target));
+
+            destinationReports.Add(new HtmlReportWriter.DestinationReportData
+            {
+                ProcIndexPath = $"{target.name}/{procReport.path}",
+                ViewIndexPath = $"{target.name}/{viewReport.path}",
+                TableIndexPath = $"{target.name}/{tableReport.path}",
+                UdtIndexPath = $"{target.name}/{udtReport.path}",
+                FunctionIndexPath = $"{target.name}/{functionReport.path}",
+                ProcCount = procReport.diffsCount,
+                ViewCount = viewReport.diffsCount,
+                TableCount = tableReport.diffsCount,
+                UdtCount = udtReport.diffsCount,
+                FunctionCount = functionReport.diffsCount,
+                ProcsCountText = procReport.count,
+                ViewsCountText = viewReport.count,
+                TablesCountText = tableReport.count,
+                UdtsCountText = udtReport.count,
+                FunctionsCountText = functionReport.count,
+            });
+        }
+
+        // Write each destination's individual html files
+        foreach (var (proc, view, table, udt, function, target) in allReports)
+        {
+            string returnNav(summaryReportDto r) => r.html
+                .Replace("{procsCount}", proc.count)
+                .Replace("{viewsCount}", view.count)
+                .Replace("{tablesCount}", table.count)
+                .Replace("{udtsCount}", udt.count)
+                .Replace("{functionsCount}", function.count);
+
+            File.WriteAllText(proc.fullPath, returnNav(proc));
+            File.WriteAllText(view.fullPath, returnNav(view));
+            File.WriteAllText(table.fullPath, returnNav(table));
+            File.WriteAllText(udt.fullPath, returnNav(udt));
+            File.WriteAllText(function.fullPath, returnNav(function));
+        }
+
+        if (ignoredObjects.Any())
+            File.WriteAllText(ignoredReport.fullPath, ignoredReport.html
+                .Replace("{procsCount}", allReports.Last().proc.count)
+                .Replace("{viewsCount}", allReports.Last().view.count)
+                .Replace("{tablesCount}", allReports.Last().table.count)
+                .Replace("{udtsCount}", allReports.Last().udt.count)
+                .Replace("{functionsCount}", allReports.Last().function.count));
+
+        sw.Stop();
+
+        return HtmlReportWriter.WriteMultiDestinationIndexSummary(
+            sourceServer,
+            targetServers.ToList(),
+            rootFolder,
+            sw.ElapsedMilliseconds,
+            destinationReports,
+            ignoredObjects.Any() ? ignoredReport.path : null);
+    }
+    public static summaryReportDto CompareProcs(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, int threadCount, string? overrideReturnPage = null)
     {
         ParallelOptions parallelOptions = new() { MaxDegreeOfParallelism = threadCount };
         /// <summary>
@@ -273,8 +372,7 @@ public class DbComparer : DbObjectHandler
             }
 
             // Step 9 - Store result entry for summary
-            var fullName = $"{schema}.{proc}";
-            var tags = objectTags.GetValueOrDefault(fullName, new List<string>());
+            var tags = DiffTagsLoader.GetTagsForObject(objectTags, schema, proc);
             results.Add(new dbObjectResult
             {
                 Type = "Proc",
@@ -294,7 +392,7 @@ public class DbComparer : DbObjectHandler
         });
 
         // Step 10 - Generate summary report
-        (string procReportHtml, string procCount) = HtmlReportWriter.WriteSummaryReport(sourceServer, destinationServer, Path.Combine(proceduresFolderPath, "index.html"), results, filter, run, isIgnoredEmpty, ignoredCount, tagColors);
+        (string procReportHtml, string procCount) = HtmlReportWriter.WriteSummaryReport(sourceServer, destinationServer, Path.Combine(proceduresFolderPath, "index.html"), results, filter, run, isIgnoredEmpty, ignoredCount, tagColors, overrideReturnPage);
         int procDiffsCount = filter == DbObjectFilter.HideUnchanged ? results.Count(r => (r.IsDestinationEmpty) || (!r.IsDestinationEmpty && !r.IsEqual)) : results.Count(); 
         return new summaryReportDto
         {
@@ -306,7 +404,7 @@ public class DbComparer : DbObjectHandler
 
         };
     }
-    public static summaryReportDto CompareViews(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, int threadCount)
+    public static summaryReportDto CompareViews(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, int threadCount, string? overrideReturnPage = null)
     {
         ParallelOptions parallelOptions = new() { MaxDegreeOfParallelism = threadCount };
         /// <summary>
@@ -408,8 +506,7 @@ public class DbComparer : DbObjectHandler
             }
 
             // Step 9 - Store result entry for summary
-            var fullName = $"{schema}.{view}";
-            var tags = objectTags.GetValueOrDefault(fullName, new List<string>());
+            var tags = DiffTagsLoader.GetTagsForObject(objectTags, schema, view);
             results.Add(new dbObjectResult
             {
                 Type = "View",
@@ -429,7 +526,7 @@ public class DbComparer : DbObjectHandler
         });
 
         // Step 10 - Generate summary report
-        (string viewReportHtml, string viewCount) = HtmlReportWriter.WriteSummaryReport(sourceServer, destinationServer, Path.Combine(viewsFolderPath, "index.html"), results, filter, run, isIgnoredEmpty, ignoredCount, tagColors);
+        (string viewReportHtml, string viewCount) = HtmlReportWriter.WriteSummaryReport(sourceServer, destinationServer, Path.Combine(viewsFolderPath, "index.html"), results, filter, run, isIgnoredEmpty, ignoredCount, tagColors, overrideReturnPage);
         int viewDiffsCount = filter == DbObjectFilter.HideUnchanged ? results.Count(r => (r.IsDestinationEmpty) || (!r.IsDestinationEmpty && !r.IsEqual)) : results.Count(); // changed
         return new summaryReportDto
         {
@@ -440,7 +537,7 @@ public class DbComparer : DbObjectHandler
             diffsCount = viewDiffsCount
         };
     }
-    public static summaryReportDto CompareTables(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, int threadCount)
+    public static summaryReportDto CompareTables(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, int threadCount, string? overrideReturnPage = null)
     {
         ParallelOptions parallelOptions = new() { MaxDegreeOfParallelism = threadCount };
         /// <summary>
@@ -491,7 +588,8 @@ public class DbComparer : DbObjectHandler
             // Step 5 - Fetch table column info
             List<string> allDifferences = new List<string>();
             (List<tableDto> sourceInfo, List<tableDto> destinationInfo,
-             List<ForeignKeyDto> sourceFKs, List<ForeignKeyDto> destFKs) =
+             List<ForeignKeyDto> sourceFKs, List<ForeignKeyDto> destFKs,
+             List<IndexDto> sourceIndexes, List<IndexDto> destIndexes) =
                 TableFetcher.GetTableInfo(sourceServer.connectionString, destinationServer.connectionString, schema, table);
 
             bool isDestinationEmpty = destinationInfo.IsNullOrEmpty();
@@ -536,6 +634,14 @@ public class DbComparer : DbObjectHandler
                 isTableEqual = false;
             }
 
+            var indexDifferences = TableIndexComparer.GetDifferenceMarkers(sourceIndexes, destIndexes);
+            if (indexDifferences.Any())
+            {
+                allDifferences.AddRange(indexDifferences);
+                isTableEqual = false;
+                Serilog.Log.Information($"{schema}.{table}: Index changes detected");
+            }
+
             if (isTableEqual && !isDestinationEmpty)
             {
                 Serilog.Log.Information($"{schema}.{table}: No Changes");
@@ -566,23 +672,23 @@ public class DbComparer : DbObjectHandler
 
                 if (isDestinationEmpty)
                 {
-                    sourceTableScript = HtmlReportWriter.CreateTableScript(schema, table, sourceInfo, sourceFKs);
+                    sourceTableScript = HtmlReportWriter.CreateTableScript(schema, table, sourceInfo, sourceFKs, sourceIndexes);
                     destTableScript = null;
                 }
                 else if (isTableEqual)
                 {
-                    sourceTableScript = HtmlReportWriter.CreateTableScript(schema, table, sourceInfo, sourceFKs);
-                    destTableScript = HtmlReportWriter.CreateTableScript(schema, table, destinationInfo, destFKs);
+                    sourceTableScript = HtmlReportWriter.CreateTableScript(schema, table, sourceInfo, sourceFKs, sourceIndexes);
+                    destTableScript = HtmlReportWriter.CreateTableScript(schema, table, destinationInfo, destFKs, destIndexes);
                 }
                 else
                 {
                     // Changed table - use ALTER scripts
-                    sourceTableScript = HtmlReportWriter.CreateAlterTableScript(schema, table, destinationInfo, sourceInfo, destFKs, sourceFKs);
-                    destTableScript = HtmlReportWriter.CreateAlterTableScript(schema, table, sourceInfo, destinationInfo, sourceFKs, destFKs);
+                    sourceTableScript = HtmlReportWriter.CreateAlterTableScript(schema, table, destinationInfo, sourceInfo, destFKs, sourceFKs, destIndexes, sourceIndexes);
+                    destTableScript = HtmlReportWriter.CreateAlterTableScript(schema, table, sourceInfo, destinationInfo, sourceFKs, destFKs, sourceIndexes, destIndexes);
                 }
 
-                HtmlReportWriter.WriteBodyHtml(sourcePath, $"{sourceServer.name} Table", HtmlReportWriter.PrintTableInfo(sourceInfo, allDifferences), returnPage, sourceTableScript);
-                HtmlReportWriter.WriteBodyHtml(destinationPath, $"{destinationServer.name} Table", HtmlReportWriter.PrintTableInfo(destinationInfo, allDifferences), returnPage, destTableScript);
+                HtmlReportWriter.WriteBodyHtml(sourcePath, $"{sourceServer.name} Table", HtmlReportWriter.PrintTableInfo(schema, table, sourceInfo, allDifferences, sourceIndexes), returnPage, sourceTableScript);
+                HtmlReportWriter.WriteBodyHtml(destinationPath, $"{destinationServer.name} Table", HtmlReportWriter.PrintTableInfo(schema, table, destinationInfo, allDifferences, destIndexes), returnPage, destTableScript);
 
                 if (!isDestinationEmpty && !isTableEqual)
                 {
@@ -598,7 +704,9 @@ public class DbComparer : DbObjectHandler
                         $"{schema}.{table}",
                         returnPage,
                         sourceFKs,
-                        destFKs
+                        destFKs,
+                        sourceIndexes,
+                        destIndexes
                     );
                     isDifferencesVisible = true;
                 }
@@ -612,16 +720,15 @@ public class DbComparer : DbObjectHandler
 
             if (makeChange == ComparerAction.ApplyChanges && !isTableEqual)
             {
-                (_, destinationNewInfo, _, var destinationNewFKs) = TableFetcher.GetTableInfo(sourceServer.connectionString, destinationServer.connectionString, schema, table);
+                (_, destinationNewInfo, _, var destinationNewFKs, _, var destinationNewIndexes) = TableFetcher.GetTableInfo(sourceServer.connectionString, destinationServer.connectionString, schema, table);
                 string newPath = Path.Combine(schemaFolder, newFile);
-                var newTableScript = HtmlReportWriter.CreateTableScript(schema, table, destinationNewInfo, destFKs);
-                HtmlReportWriter.WriteBodyHtml(newPath, $"New {destinationServer.name} Table", HtmlReportWriter.PrintTableInfo(destinationNewInfo, null), returnPage, newTableScript);
+                var newTableScript = HtmlReportWriter.CreateTableScript(schema, table, destinationNewInfo, destinationNewFKs, destinationNewIndexes);
+                HtmlReportWriter.WriteBodyHtml(newPath, $"New {destinationServer.name} Table", HtmlReportWriter.PrintTableInfo(schema, table, destinationNewInfo, null, destinationNewIndexes), returnPage, newTableScript);
                 wasAltered = true;
             }
 
             // Step 10 - Store result entry for summary
-            var fullName = $"{schema}.{table}";
-            var tags = objectTags.GetValueOrDefault(fullName, new List<string>());
+            var tags = DiffTagsLoader.GetTagsForObject(objectTags, schema, table);
             var resultItem = new dbObjectResult
             {
                 Type = "Table",
@@ -633,6 +740,8 @@ public class DbComparer : DbObjectHandler
                 DestinationTableInfo = destinationInfo,
                 SourceForeignKeys = sourceFKs,
                 DestinationForeignKeys = destFKs,
+                SourceIndexes = sourceIndexes,
+                DestinationIndexes = destIndexes,
                 SourceFile = isVisible ? Path.Combine(safeSchema, sourceFile) : null,
                 DestinationFile = isVisible ? Path.Combine(safeSchema, destinationFile) : null,
                 DifferencesFile = isDifferencesVisible ? Path.Combine(safeSchema, differencesFile) : null,
@@ -647,7 +756,7 @@ public class DbComparer : DbObjectHandler
         });
 
         // Step 11 - Generate summary report
-        (string tableHtmlReport, string tablesCount) = HtmlReportWriter.WriteSummaryReport(sourceServer, destinationServer, Path.Combine(tablesFolderPath, "index.html"), results, filter, run, isIgnoredEmpty, ignoredCount, tagColors);
+        (string tableHtmlReport, string tablesCount) = HtmlReportWriter.WriteSummaryReport(sourceServer, destinationServer, Path.Combine(tablesFolderPath, "index.html"), results, filter, run, isIgnoredEmpty, ignoredCount, tagColors, overrideReturnPage);
         int tableDiffsCount = filter == DbObjectFilter.HideUnchanged ? results.Count(r => (r.IsDestinationEmpty) || (!r.IsDestinationEmpty && !r.IsEqual)) : results.Count();
         return new summaryReportDto
         {
@@ -658,7 +767,7 @@ public class DbComparer : DbObjectHandler
             diffsCount = tableDiffsCount
         };
     }
-    public static summaryReportDto CompareUdts(DbServer sourceServer,DbServer destinationServer, string outputFolder,ComparerAction makeChange,DbObjectFilter filter,Run run,HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, int threadCount)
+    public static summaryReportDto CompareUdts(DbServer sourceServer,DbServer destinationServer, string outputFolder,ComparerAction makeChange,DbObjectFilter filter,Run run,HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, int threadCount, string? overrideReturnPage = null)
     {
         ParallelOptions parallelOptions = new() { MaxDegreeOfParallelism = threadCount };
 
@@ -743,8 +852,7 @@ public class DbComparer : DbObjectHandler
 
 
             // 9) Summary row
-            var fullName = $"{schema}.{name}";
-            var tags = objectTags.GetValueOrDefault(fullName, new List<string>());
+            var tags = DiffTagsLoader.GetTagsForObject(objectTags, schema, name);
             results.Add(new dbObjectResult
             {
                 Type = "UDT",
@@ -765,7 +873,7 @@ public class DbComparer : DbObjectHandler
         // 10) Summary page
         (string udtHtml, string udtCount) = HtmlReportWriter.WriteSummaryReport(
             sourceServer, destinationServer, Path.Combine(udtsFolderPath, "index.html"),
-            results, filter, run, isIgnoredEmpty, ignoredCount, tagColors);
+            results, filter, run, isIgnoredEmpty, ignoredCount, tagColors, overrideReturnPage);
 
         int udtDiffsCount = filter == DbObjectFilter.HideUnchanged ? results.Count(r => (r.IsDestinationEmpty) || (!r.IsDestinationEmpty && !r.IsEqual)) : results.Count(); 
 
@@ -778,7 +886,7 @@ public class DbComparer : DbObjectHandler
             diffsCount = udtDiffsCount
         };
     }
-    private static summaryReportDto CompareFunctions(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, int threadCount)
+    private static summaryReportDto CompareFunctions(DbServer sourceServer, DbServer destinationServer, string outputFolder, ComparerAction makeChange, DbObjectFilter filter, Run run, HashSet<string> ignoredObjects, Dictionary<string, List<string>> objectTags, Dictionary<string, string> tagColors, int threadCount, string? overrideReturnPage = null)
     {
         ParallelOptions parallelOptions = new() { MaxDegreeOfParallelism = threadCount };
 
@@ -882,8 +990,7 @@ public class DbComparer : DbObjectHandler
             }
 
             // 9) Summary row
-            var fullName = $"{schema}.{name}";
-            var tags = objectTags.GetValueOrDefault(fullName, new List<string>());
+            var tags = DiffTagsLoader.GetTagsForObject(objectTags, schema, name);
             results.Add(new dbObjectResult
             {
                 Type = "FUNCTION",
@@ -905,7 +1012,7 @@ public class DbComparer : DbObjectHandler
         // 10) Summary page
         (string functionHtml, string functionCount) = HtmlReportWriter.WriteSummaryReport(
             sourceServer, destinationServer, Path.Combine(functionsFolderPath, "index.html"),
-            results, filter, run, isIgnoredEmpty, ignoredCount, tagColors);
+            results, filter, run, isIgnoredEmpty, ignoredCount, tagColors, overrideReturnPage);
 
         int functionDiffsCount = filter == DbObjectFilter.HideUnchanged
             ? results.Count(r => r.IsDestinationEmpty || (!r.IsDestinationEmpty && !r.IsEqual))

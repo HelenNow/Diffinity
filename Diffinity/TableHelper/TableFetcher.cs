@@ -66,6 +66,44 @@ SELECT
       AND s.name = @schemaName
     ORDER BY fk.name, fkc.constraint_column_id;
 ";
+    private const string GetIndexesQuery = @"
+    SELECT
+        i.name AS IndexName,
+        i.type_desc AS IndexType,
+        i.is_unique AS IsUnique,
+        i.is_unique_constraint AS IsUniqueConstraint,
+        i.filter_definition AS FilterDefinition,
+        keyCols.KeyColumns,
+        includeCols.IncludedColumns
+    FROM sys.indexes i
+    INNER JOIN sys.tables t ON i.object_id = t.object_id
+    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+    OUTER APPLY (
+        SELECT STRING_AGG(
+            QUOTENAME(c.name) + CASE WHEN ic.is_descending_key = 1 THEN ' DESC' ELSE ' ASC' END,
+            ', '
+        ) WITHIN GROUP (ORDER BY ic.key_ordinal) AS KeyColumns
+        FROM sys.index_columns ic
+        INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+        WHERE ic.object_id = i.object_id
+          AND ic.index_id = i.index_id
+          AND ic.key_ordinal > 0
+    ) keyCols
+    OUTER APPLY (
+        SELECT STRING_AGG(QUOTENAME(c.name), ', ') WITHIN GROUP (ORDER BY ic.index_column_id) AS IncludedColumns
+        FROM sys.index_columns ic
+        INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+        WHERE ic.object_id = i.object_id
+          AND ic.index_id = i.index_id
+          AND ic.is_included_column = 1
+    ) includeCols
+    WHERE t.name = @tableName
+      AND s.name = @schemaName
+      AND i.index_id > 0
+      AND i.is_hypothetical = 0
+      AND i.is_primary_key = 0
+    ORDER BY i.name;
+";
     /// <summary>
     /// Retrieves the names of all tables from the source database.
     /// </summary>
@@ -84,7 +122,8 @@ SELECT
     /// <param name="fullTableName"></param>
     /// <returns></returns>
     public static (List<tableDto> sourceTableColumns, List<tableDto> destinationTableColumns,
-                   List<ForeignKeyDto> sourceForeignKeys, List<ForeignKeyDto> destinationForeignKeys)
+                   List<ForeignKeyDto> sourceForeignKeys, List<ForeignKeyDto> destinationForeignKeys,
+                   List<IndexDto> sourceIndexes, List<IndexDto> destinationIndexes)
         GetTableInfo(string sourceConnectionString, string destinationConnectionString, string schema, string TableName)
     {
         using SqlConnection sourceConnection = new SqlConnection(sourceConnectionString);
@@ -95,8 +134,10 @@ SELECT
 
         var sourceFKs = sourceConnection.Query<ForeignKeyDto>(GetForeignKeysQuery, new { tableName = TableName, schemaName = schema }).ToList();
         var destinationFKs = destinationConnection.Query<ForeignKeyDto>(GetForeignKeysQuery, new { tableName = TableName, schemaName = schema }).ToList();
+        var sourceIndexes = sourceConnection.Query<IndexDto>(GetIndexesQuery, new { tableName = TableName, schemaName = schema }).ToList();
+        var destinationIndexes = destinationConnection.Query<IndexDto>(GetIndexesQuery, new { tableName = TableName, schemaName = schema }).ToList();
 
-        return (sourceInfo, destinationInfo, sourceFKs, destinationFKs);
+        return (sourceInfo, destinationInfo, sourceFKs, destinationFKs, sourceIndexes, destinationIndexes);
     }
 }
 public class tableDto
@@ -116,4 +157,15 @@ public class ForeignKeyDto
     public string ReferencedTable { get; set; }
     public string ReferencedColumn { get; set; }
     public string ColumnName { get; set; }
+}
+
+public class IndexDto
+{
+    public string IndexName { get; set; }
+    public string IndexType { get; set; }
+    public bool IsUnique { get; set; }
+    public bool IsUniqueConstraint { get; set; }
+    public string? FilterDefinition { get; set; }
+    public string? KeyColumns { get; set; }
+    public string? IncludedColumns { get; set; }
 }

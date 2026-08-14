@@ -84,9 +84,11 @@ public class HtmlReportWriterTests : IDisposable
     {
         // Arrange
         var ignored = new HashSet<string> { "Table1", "Proc1" };
+        var source = new DbServer("SourceDb", "Server=localhost;Database=SrcDb;");
+        var destination = new DbServer("DestDb", "Server=localhost;Database=DestDb;");
 
         // Act
-        var report = HtmlReportWriter.WriteIgnoredReport(_tempFolder, ignored, Run.All);
+        var report = HtmlReportWriter.WriteIgnoredReport(_tempFolder, ignored, Run.All, source, destination);
 
         // Assert
         Assert.True(File.Exists(report.fullPath));

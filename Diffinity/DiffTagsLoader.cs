@@ -37,4 +37,21 @@ public static class DiffTagsLoader
 
         return tagsDictionary;
     }
+
+    public static List<string> GetTagsForObject(Dictionary<string, List<string>> objectTags, string schema, string name)
+    {
+        var fullName = $"{schema}.{name}";
+        var schemaWildcard = $"{schema}.*";
+
+        var directTags = objectTags.GetValueOrDefault(fullName, new List<string>());
+        var schemaTags = objectTags.GetValueOrDefault(schemaWildcard, new List<string>());
+
+        if (!schemaTags.Any())
+            return directTags;
+
+        if (!directTags.Any())
+            return schemaTags;
+
+        return directTags.Union(schemaTags, StringComparer.OrdinalIgnoreCase).ToList();
+    }
 }
